@@ -1,0 +1,29 @@
+# XcodeGen output — regenerate with `xcodegen generate`
+QuickPad.xcodeproj/
+
+# Xcode build artifacts
+build/
+DerivedData/
+*.xcworkspace
+!default.xcworkspace
+
+# User-specific Xcode state
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
