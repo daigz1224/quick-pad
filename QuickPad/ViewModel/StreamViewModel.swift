@@ -89,6 +89,33 @@ final class StreamViewModel {
         }
     }
 
+    // MARK: - Phase 2: Rescue + Task state
+
+    /// Rescue an entry: remove from its current position, update timestamp
+    /// to now, and insert at the top of today's section.
+    func rescueEntry(_ entry: StreamEntry) {
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.rescue(rawLine: entry.rawLine)
+            lastWriteError = nil
+            load()
+        } catch {
+            lastWriteError = "rescue failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Toggle a task entry's state. Non-task entries are ignored.
+    func setTaskState(_ entry: StreamEntry, newState: TaskState) {
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.setTaskState(rawLine: entry.rawLine, newState: newState)
+            lastWriteError = nil
+            load()
+        } catch {
+            lastWriteError = "task state change failed: \(error.localizedDescription)"
+        }
+    }
+
     /// Undo the most recent soft-delete.
     func undoDelete() {
         guard let entry = undoEntry else { return }

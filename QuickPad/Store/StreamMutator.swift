@@ -74,6 +74,89 @@ struct StreamMutator {
         try replaceLine(oldLine: rawLine, newLine: newLine, in: fileURL)
     }
 
+    // MARK: - Rescue (float to today)
+
+    /// Move an entry to today's section: remove the old line, update its
+    /// timestamp to `now`, and insert it right after today's separator
+    /// (creating the separator if needed).
+    func rescue(
+        rawLine: String,
+        at now: Date = Date(),
+        fileURL: URL = MarkdownFileStore.streamFileURL
+    ) throws {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let text = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            throw MutationError.fileNotReadable
+        }
+
+        var lines = text.components(separatedBy: "\n")
+
+        // 1. Find and remove the old line.
+        guard let removeIdx = lines.firstIndex(of: rawLine) else {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            guard let trimmedIdx = lines.firstIndex(where: {
+                $0.trimmingCharacters(in: .whitespaces) == trimmed
+            }) else {
+                throw MutationError.lineNotFound
+            }
+            lines.remove(at: trimmedIdx)
+            try insertRescuedLine(rawLine: rawLine, into: &lines, now: now, fileURL: fileURL)
+            return
+        }
+        lines.remove(at: removeIdx)
+
+        try insertRescuedLine(rawLine: rawLine, into: &lines, now: now, fileURL: fileURL)
+    }
+
+    private func insertRescuedLine(
+        rawLine: String,
+        into lines: inout [String],
+        now: Date,
+        fileURL: URL
+    ) throws {
+        // 2. Build the new line with updated timestamp.
+        let newLine = Self.rebuildLineWithTimestamp(oldRawLine: rawLine, now: now)
+
+        // 3. Find today's separator; create one if absent.
+        let todaySep = Self.separatorLine(for: now)
+        var insertIdx: Int
+
+        if let sepIdx = lines.firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespaces) == todaySep
+        }) {
+            // Insert after the separator (skip any blank lines right after it).
+            insertIdx = sepIdx + 1
+            while insertIdx < lines.count && lines[insertIdx].trimmingCharacters(in: .whitespaces).isEmpty {
+                insertIdx += 1
+            }
+        } else {
+            // No today separator yet — insert at the top of the file.
+            lines.insert("", at: 0)
+            lines.insert(todaySep, at: 0)
+            insertIdx = 2
+        }
+
+        lines.insert(newLine, at: insertIdx)
+
+        // 4. Write back.
+        let result = lines.joined(separator: "\n")
+        try Self.atomicWrite(result, to: fileURL)
+    }
+
+    // MARK: - Task state toggle
+
+    /// Change a task entry's state. `[task] foo` → `[task>done] foo`.
+    /// Non-task entries are ignored (no-op).
+    func setTaskState(
+        rawLine: String,
+        newState: TaskState,
+        fileURL: URL = MarkdownFileStore.streamFileURL
+    ) throws {
+        let newLine = Self.replaceTaskState(rawLine: rawLine, newState: newState)
+        guard newLine != rawLine else { return }
+        try replaceLine(oldLine: rawLine, newLine: newLine, in: fileURL)
+    }
+
     // MARK: - Line manipulation (pure, testable)
 
     /// Rebuild an entry line with new content, preserving the prefix
@@ -151,7 +234,90 @@ struct StreamMutator {
         try Self.atomicWrite(result, to: fileURL)
     }
 
+    /// Rebuild a line with a new timestamp, preserving content and bracket.
+    /// `- OLD_TS [note] foo` → `- NEW_TS [note] foo`
+    static func rebuildLineWithTimestamp(oldRawLine: String, now: Date) -> String {
+        // Expected format: `- TIMESTAMP [type] content`
+        // We replace everything up to the first `[` with the new timestamp.
+        guard let bracketIdx = oldRawLine.firstIndex(of: "[") else {
+            return oldRawLine
+        }
+        let rest = String(oldRawLine[bracketIdx...])
+        let ts = isoTimestampFormatter.string(from: now)
+        return "- \(ts) \(rest)"
+    }
+
+    /// Replace the task state suffix in a bracket token.
+    /// `[task] foo` → `[task>done] foo`
+    /// `[task>pending] foo` → `[task>done] foo`
+    /// Non-task lines are returned unchanged.
+    static func replaceTaskState(rawLine: String, newState: TaskState) -> String {
+        guard let openBracket = rawLine.firstIndex(of: "["),
+              let closeBracket = rawLine.firstIndex(of: "]") else {
+            return rawLine
+        }
+        let token = String(rawLine[rawLine.index(after: openBracket)..<closeBracket])
+
+        // Strip >deleted suffix temporarily if present; we'll re-add it.
+        let isDeleted = token.contains(">deleted")
+        let cleaned = token.replacingOccurrences(of: ">deleted", with: "")
+
+        // Must be a task-type entry.
+        let head = cleaned.split(separator: ">", maxSplits: 1).first.map(String.init) ?? cleaned
+        guard head == "task" else { return rawLine }
+
+        // Build new token.
+        var newToken: String
+        if newState == .pending {
+            newToken = "task"
+        } else {
+            newToken = "task>\(newState.rawValue)"
+        }
+        if isDeleted {
+            newToken += ">deleted"
+        }
+
+        // Reconstruct the line.
+        let prefix = String(rawLine[rawLine.startIndex...openBracket])
+        let suffix = String(rawLine[closeBracket...])
+        return prefix + newToken + suffix
+    }
+
+    /// `--- 2026-04-09 Thursday ---`
+    static func separatorLine(for date: Date) -> String {
+        let day = isoDayFormatter.string(from: date)
+        let weekday = weekdayFormatter.string(from: date)
+        return "--- \(day) \(weekday) ---"
+    }
+
     // MARK: - Helpers
+
+    private static let isoDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "EEEE"
+        return f
+    }()
+
+    private static let isoTimestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
+        return f
+    }()
 
     private static func expandShortcuts(_ content: String) -> String {
         if content.hasPrefix("* ") {

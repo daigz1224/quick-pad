@@ -18,19 +18,24 @@ struct StreamListView: View {
     /// "stream.md is empty" hint; `PopoverRootView` swaps in a
     /// search-specific message when a query returns no matches.
     var emptyStateOverride: AnyView? = nil
-    /// Callbacks for Phase 1.5 mutation (edit / delete).
+    /// Callbacks for mutation (edit / delete / rescue / task state).
     var onEdit: ((StreamEntry, String) -> Void)?
     var onDelete: ((StreamEntry) -> Void)?
+    var onRescue: ((StreamEntry) -> Void)?
+    var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
 
-    /// Sections with soft-deleted entries filtered out.
+    /// Active type filter. Nil = show all.
+    var typeFilter: BulletType? = nil
+
+    /// Sections with soft-deleted entries filtered out, plus optional
+    /// type filter applied.
     private var visibleSections: [StreamSection] {
         sections.compactMap { section in
-            let visible = section.entries.filter { !$0.isDeleted }
+            var visible = section.entries.filter { !$0.isDeleted }
+            if let filter = typeFilter {
+                visible = visible.filter { $0.bulletType == filter }
+            }
             guard !visible.isEmpty else {
-                // Keep section if it has a header (day separator) even
-                // with no visible entries — but only if the original
-                // section had entries. Empty headers from zero-entry
-                // days are fine to keep.
                 if section.rawHeader != nil && section.entries.isEmpty {
                     return section
                 }
@@ -62,7 +67,9 @@ struct StreamListView: View {
                                 entry: entry,
                                 highlightQuery: highlightQuery,
                                 onEdit: onEdit,
-                                onDelete: onDelete
+                                onDelete: onDelete,
+                                onRescue: onRescue,
+                                onTaskStateChange: onTaskStateChange
                             )
                             .padding(.horizontal, 14)
                             .padding(.vertical, 2)

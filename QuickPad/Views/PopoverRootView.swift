@@ -10,25 +10,24 @@ struct PopoverRootView: View {
 
     @AppStorage("appearanceMode") private var appearanceRaw: String = AppearanceMode.auto.rawValue
 
-    // Search mode. @State persists across popover open/close cycles
-    // because NSHostingController keeps the SwiftUI view tree alive,
-    // which we want — reopening the popover shouldn't throw away an
-    // in-progress search.
+    // Search mode.
     @State private var searchQuery: String = ""
     @State private var isSearching: Bool = false
 
+    // Type filter (⌘1-5). Nil = show all.
+    @State private var typeFilter: BulletType? = nil
+
     /// Auto-dismiss timer for the undo toast.
     @State private var undoTimer: Timer?
+
+    /// Toast message for rescue feedback.
+    @State private var rescueToast: String? = nil
+    @State private var rescueTimer: Timer? = nil
 
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
     }
 
-    /// The effective light/dark state after the Auto/Light/Dark override
-    /// is applied. We compute this ourselves instead of reading
-    /// `colorScheme` after `preferredColorScheme` because the background
-    /// color has to match the appearance *we* chose, not whatever the
-    /// hosting window defaults to on first mount.
     private var isDark: Bool {
         switch appearance {
         case .light: return false
@@ -37,10 +36,6 @@ struct PopoverRootView: View {
         }
     }
 
-    /// Deeper-than-system background. `NSColor.windowBackgroundColor` in
-    /// dark mode sits around #2E2E2E which reads as medium gray; here we
-    /// push to ~#17171A to match the "真·黑夜" look of apps like Raycast
-    /// and Linear.
     private var backgroundColor: Color {
         if isDark {
             return Color(red: 0.09, green: 0.09, blue: 0.10)
@@ -62,26 +57,44 @@ struct PopoverRootView: View {
                 } else {
                     InputBar()
                 }
+
+                // Type filter indicator
+                if let filter = typeFilter {
+                    filterBar(filter)
+                }
+
                 StreamListView(
                     sections: filteredSections,
                     highlightQuery: isSearching ? searchQuery : "",
-                    emptyStateOverride: isSearching && !searchQuery.isEmpty
-                        ? AnyView(searchEmptyState)
-                        : nil,
+                    emptyStateOverride: emptyStateOverride,
                     onEdit: { entry, newContent in
                         viewModel.editEntry(entry, newContent: newContent)
                     },
                     onDelete: { entry in
                         viewModel.deleteEntry(entry)
                         scheduleUndoDismissal()
-                    }
+                    },
+                    onRescue: { entry in
+                        viewModel.rescueEntry(entry)
+                        showRescueToast()
+                    },
+                    onTaskStateChange: { entry, newState in
+                        viewModel.setTaskState(entry, newState: newState)
+                    },
+                    typeFilter: typeFilter
                 )
             }
 
-            // Undo toast — slides up from the bottom when a delete
-            // just happened.
+            // Undo toast
             if viewModel.undoEntry != nil {
                 undoToast
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 8)
+            }
+
+            // Rescue toast
+            if let msg = rescueToast {
+                rescueToastView(msg)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.bottom, 8)
             }
@@ -89,45 +102,70 @@ struct PopoverRootView: View {
         .frame(width: 420, height: 520)
         .background(backgroundColor)
         .preferredColorScheme(appearance.colorScheme)
-        // Belt-and-suspenders against the "everything looks selected"
-        // artifact: disable text selection on every Text underneath and
-        // disable the focus ring that macOS 14 draws around the first
-        // focusable button when the popover is shown.
         .textSelection(.disabled)
         .focusEffectDisabled()
-        // Hidden ⌘F handler. `.keyboardShortcut` on a Button intercepts
-        // the combo from anywhere in the popover — even while the
-        // `InputBar` TextField has first-responder focus — because
-        // SwiftUI routes keyboard shortcuts through the view hierarchy
-        // before the responder chain sees them.
         .background {
-            Button("Find") {
-                isSearching = true
-            }
-            .keyboardShortcut("f", modifiers: .command)
-            .opacity(0)
-            .frame(width: 0, height: 0)
-            .accessibilityHidden(true)
+            // Hidden keyboard shortcut handlers.
+            Group {
+                Button("Find") { isSearching = true }
+                    .keyboardShortcut("f", modifiers: .command)
 
-            // Hidden ⌘Z handler for undo delete.
-            Button("Undo") {
-                performUndo()
+                Button("Undo") { performUndo() }
+                    .keyboardShortcut("z", modifiers: .command)
+
+                // ⌘1-5 type filters
+                Button("FilterNote") { toggleFilter(.note) }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("FilterTask") { toggleFilter(.task) }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("FilterEvent") { toggleFilter(.event) }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("FilterIdea") { toggleFilter(.idea) }
+                    .keyboardShortcut("4", modifiers: .command)
+                Button("FilterAll") { typeFilter = nil }
+                    .keyboardShortcut("5", modifiers: .command)
             }
-            .keyboardShortcut("z", modifiers: .command)
             .opacity(0)
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }
         .onAppear { viewModel.load() }
         .animation(.easeInOut(duration: 0.2), value: viewModel.undoEntry != nil)
+        .animation(.easeInOut(duration: 0.2), value: rescueToast != nil)
+    }
+
+    // MARK: - Type filter
+
+    private func toggleFilter(_ type: BulletType) {
+        if typeFilter == type {
+            typeFilter = nil
+        } else {
+            typeFilter = type
+        }
+    }
+
+    private func filterBar(_ filter: BulletType) -> some View {
+        HStack(spacing: 6) {
+            Text("Showing: \(filter.label)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                typeFilter = nil
+            } label: {
+                Text("⌘5 clear")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.blue.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.06))
     }
 
     // MARK: - Search helpers
 
-    /// Entries filtered by the current search query. Case-insensitive
-    /// substring match against `content` (falling back to `rawLine`
-    /// for unparsed entries). Sections with zero matches are dropped
-    /// so the user doesn't see bare day separators.
     private var filteredSections: [StreamSection] {
         guard isSearching, !searchQuery.isEmpty else {
             return viewModel.sections
@@ -145,6 +183,16 @@ struct PopoverRootView: View {
         }
     }
 
+    private var emptyStateOverride: AnyView? {
+        if isSearching && !searchQuery.isEmpty {
+            return AnyView(searchEmptyState)
+        }
+        if typeFilter != nil {
+            return AnyView(filterEmptyState)
+        }
+        return nil
+    }
+
     private func dismissSearch() {
         isSearching = false
         searchQuery = ""
@@ -156,6 +204,18 @@ struct PopoverRootView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
             Text("esc to exit search")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var filterEmptyState: some View {
+        VStack(spacing: 6) {
+            Text("no \(typeFilter?.label ?? "") entries")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text("⌘5 to clear filter")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
         }
@@ -203,6 +263,37 @@ struct PopoverRootView: View {
         undoTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
             DispatchQueue.main.async {
                 viewModel.undoEntry = nil
+            }
+        }
+    }
+
+    // MARK: - Rescue toast
+
+    private func rescueToastView(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.to.line")
+                .font(.system(size: 10))
+                .foregroundStyle(.blue)
+            Text(message)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func showRescueToast() {
+        rescueTimer?.invalidate()
+        rescueToast = "rescued ↑ back to today"
+        rescueTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                rescueToast = nil
             }
         }
     }

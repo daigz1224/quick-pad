@@ -46,4 +46,26 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         }
         return bulletType.glyph
     }
+
+    /// Number of calendar days between entry timestamp and now. Returns
+    /// 0 for entries without a timestamp (treated as "today"). Clamped
+    /// to non-negative so a future timestamp (timezone edge case) never
+    /// produces a stale opacity.
+    var ageInDays: Int {
+        guard let timestamp else { return 0 }
+        return max(0, Calendar.current.dateComponents([.day], from: timestamp, to: Date()).day ?? 0)
+    }
+
+    /// Opacity driven by the gravity-decay curve from `ARCHITECTURE.md`.
+    /// Older entries fade out, creating the visual "sedimentation" effect.
+    var gravityOpacity: Double {
+        switch ageInDays {
+        case 0:      return 1.0
+        case 1:      return 0.85
+        case 2...3:  return 0.68
+        case 4...7:  return 0.50
+        case 8...14: return 0.35
+        default:     return 0.22
+        }
+    }
 }

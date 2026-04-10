@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// One stream entry: fixed-width glyph column, content, optional time.
-/// Opacity / gravity decay is Phase 2 in the architecture doc; rows here
-/// render at full opacity.
+/// Opacity decays with age via the gravity system (Phase 2).
 struct StreamEntryRow: View {
     let entry: StreamEntry
     /// Non-empty while the user is in search mode. Matching substrings
@@ -12,9 +11,14 @@ struct StreamEntryRow: View {
     var onEdit: ((StreamEntry, String) -> Void)?
     /// Called when the user soft-deletes via context menu → Delete.
     var onDelete: ((StreamEntry) -> Void)?
+    /// Called when the user clicks an old entry to rescue it to today.
+    var onRescue: ((StreamEntry) -> Void)?
+    /// Called when the user toggles a task's state.
+    var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
 
     @State private var isEditing: Bool = false
     @State private var editDraft: String = ""
+    @State private var isHovering: Bool = false
     @FocusState private var isEditFocused: Bool
 
     // Fonts are defined once so content / glyph / time / tag all stay
@@ -24,13 +28,14 @@ struct StreamEntryRow: View {
     private static let timeFont = Font.system(size: 10, design: .monospaced)
     private static let tagFont = Font.system(size: 9, design: .monospaced)
 
+    /// Whether this entry is old enough to show the "click to rescue" hint.
+    private var isRescuable: Bool {
+        entry.ageInDays >= 1 && entry.bulletType != .unknown
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(entry.displayGlyph)
-                .font(Self.contentFont)
-                .tracking(-0.3)
-                .foregroundStyle(glyphColor)
-                .frame(width: 12, alignment: .leading)
+            glyphView
 
             VStack(alignment: .leading, spacing: 1) {
                 if isEditing {
@@ -47,7 +52,12 @@ struct StreamEntryRow: View {
 
             Spacer(minLength: 6)
 
-            if let time = timeLabel {
+            if isHovering && isRescuable {
+                Text("↑ rescue")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.blue.opacity(0.7))
+                    .fixedSize()
+            } else if let time = timeLabel {
                 Text(time)
                     .font(Self.timeFont)
                     .foregroundStyle(.tertiary)
@@ -62,6 +72,16 @@ struct StreamEntryRow: View {
                     .offset(x: -8)
             }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .onTapGesture {
+            if isRescuable {
+                onRescue?(entry)
+            }
+        }
+        .opacity(entry.gravityOpacity)
         .contextMenu {
             if entry.bulletType != .unknown {
                 Button {
@@ -69,11 +89,65 @@ struct StreamEntryRow: View {
                 } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+
+                // Task state submenu
+                if entry.bulletType == .task {
+                    Divider()
+                    taskStateMenu
+                }
+
+                // Rescue option for old entries
+                if isRescuable {
+                    Divider()
+                    Button {
+                        onRescue?(entry)
+                    } label: {
+                        Label("Rescue to Today", systemImage: "arrow.up.to.line")
+                    }
+                }
+
+                Divider()
                 Button(role: .destructive) {
                     onDelete?(entry)
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+        }
+    }
+
+    // MARK: - Task state menu
+
+    @ViewBuilder
+    private var taskStateMenu: some View {
+        let current = entry.taskState ?? .pending
+
+        if current != .done {
+            Button {
+                onTaskStateChange?(entry, .done)
+            } label: {
+                Label("Mark Done", systemImage: "checkmark")
+            }
+        }
+        if current != .pending {
+            Button {
+                onTaskStateChange?(entry, .pending)
+            } label: {
+                Label("Mark Pending", systemImage: "circle")
+            }
+        }
+        if current != .migrated {
+            Button {
+                onTaskStateChange?(entry, .migrated)
+            } label: {
+                Label("Mark Migrated", systemImage: "arrow.right")
+            }
+        }
+        if current != .cancelled {
+            Button {
+                onTaskStateChange?(entry, .cancelled)
+            } label: {
+                Label("Mark Cancelled", systemImage: "xmark")
             }
         }
     }
@@ -114,8 +188,6 @@ struct StreamEntryRow: View {
     private func beginEditing() {
         editDraft = entry.content
         isEditing = true
-        // Slight delay so the TextField is in the view tree before we
-        // try to grab focus.
         DispatchQueue.main.async {
             isEditFocused = true
         }
@@ -138,6 +210,32 @@ struct StreamEntryRow: View {
 
     // MARK: - Display
 
+    private var glyphView: some View {
+        Group {
+            if entry.bulletType == .task {
+                // Clickable glyph for tasks: cycles pending → done.
+                Button {
+                    let next: TaskState = (entry.taskState == .done) ? .pending : .done
+                    onTaskStateChange?(entry, next)
+                } label: {
+                    Text(entry.displayGlyph)
+                        .font(Self.contentFont)
+                        .tracking(-0.3)
+                        .foregroundStyle(glyphColor)
+                        .frame(width: 12, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(entry.displayGlyph)
+                    .font(Self.contentFont)
+                    .tracking(-0.3)
+                    .foregroundStyle(glyphColor)
+                    .frame(width: 12, alignment: .leading)
+            }
+        }
+    }
+
     private var contentLine: some View {
         let body = entry.content.isEmpty ? entry.rawLine : entry.content
         return Self.highlighted(body, query: highlightQuery)
@@ -149,9 +247,7 @@ struct StreamEntryRow: View {
     }
 
     /// Split `text` on every case-insensitive occurrence of `query`
-    /// and return a `Text` that styles the matches. SwiftUI's `Text`
-    /// concatenation keeps per-segment styling (inner wins over outer
-    /// view modifiers) which is exactly what we need.
+    /// and return a `Text` that styles the matches.
     private static func highlighted(_ text: String, query: String) -> Text {
         guard !query.isEmpty else { return Text(text) }
 
@@ -162,9 +258,6 @@ struct StreamEntryRow: View {
             if range.lowerBound > cursor {
                 result = result + Text(String(text[cursor..<range.lowerBound]))
             }
-            // Use `.bold()` alongside the yellow to ensure the hit is
-            // visible even in the rare case where the user's system
-            // accent happens to clash with pure yellow.
             result = result + Text(String(text[range]))
                 .foregroundStyle(Color.yellow)
                 .bold()
@@ -192,11 +285,34 @@ struct StreamEntryRow: View {
         }
     }
 
-    private var timeLabel: String? {
-        guard let timestamp = entry.timestamp else { return nil }
+    /// Cached formatter for short time labels ("3pm"). Created once to
+    /// avoid allocating on every SwiftUI body evaluation.
+    private static let shortTimeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm"
-        return f.string(from: timestamp)
+        f.dateFormat = "ha"
+        return f
+    }()
+
+    private var timeLabel: String? {
+        guard let timestamp = entry.timestamp else { return nil }
+        // Gravity-aware time labels from architecture doc:
+        // Today: relative ("now" / "2m" / "3h")
+        // 1-3 days: "11pm" / "3pm"
+        // 4+ days: omitted
+        let days = entry.ageInDays
+
+        if days == 0 {
+            let seconds = Int(Date().timeIntervalSince(timestamp))
+            if seconds < 60 { return "now" }
+            let minutes = seconds / 60
+            if minutes < 60 { return "\(minutes)m" }
+            let hours = minutes / 60
+            return "\(hours)h"
+        } else if days <= 3 {
+            return Self.shortTimeFormatter.string(from: timestamp).lowercased()
+        }
+        // 4+ days: omit timestamp per gravity decay spec.
+        return nil
     }
 }
