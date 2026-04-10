@@ -177,9 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func runArchiveAndSchedule() {
         // Run once on launch.
         runArchive()
-        // Then every hour.
+        // Then once per day.
         archiveTimer = Timer.scheduledTimer(
-            withTimeInterval: 3600,
+            withTimeInterval: 86400,
             repeats: true
         ) { [weak self] _ in
             self?.runArchive()
