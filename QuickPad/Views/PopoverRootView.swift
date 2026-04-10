@@ -17,6 +17,9 @@ struct PopoverRootView: View {
     @State private var searchQuery: String = ""
     @State private var isSearching: Bool = false
 
+    /// Auto-dismiss timer for the undo toast.
+    @State private var undoTimer: Timer?
+
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
     }
@@ -49,22 +52,39 @@ struct PopoverRootView: View {
     var body: some View {
         @Bindable var popoverController = popoverController
 
-        VStack(spacing: 0) {
-            header
-            Divider()
-                .opacity(0.5)
-            if isSearching {
-                SearchBar(query: $searchQuery, onDismiss: dismissSearch)
-            } else {
-                InputBar()
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                header
+                Divider()
+                    .opacity(0.5)
+                if isSearching {
+                    SearchBar(query: $searchQuery, onDismiss: dismissSearch)
+                } else {
+                    InputBar()
+                }
+                StreamListView(
+                    sections: filteredSections,
+                    highlightQuery: isSearching ? searchQuery : "",
+                    emptyStateOverride: isSearching && !searchQuery.isEmpty
+                        ? AnyView(searchEmptyState)
+                        : nil,
+                    onEdit: { entry, newContent in
+                        viewModel.editEntry(entry, newContent: newContent)
+                    },
+                    onDelete: { entry in
+                        viewModel.deleteEntry(entry)
+                        scheduleUndoDismissal()
+                    }
+                )
             }
-            StreamListView(
-                sections: filteredSections,
-                highlightQuery: isSearching ? searchQuery : "",
-                emptyStateOverride: isSearching && !searchQuery.isEmpty
-                    ? AnyView(searchEmptyState)
-                    : nil
-            )
+
+            // Undo toast — slides up from the bottom when a delete
+            // just happened.
+            if viewModel.undoEntry != nil {
+                undoToast
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 8)
+            }
         }
         .frame(width: 420, height: 520)
         .background(backgroundColor)
@@ -88,8 +108,18 @@ struct PopoverRootView: View {
             .opacity(0)
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
+
+            // Hidden ⌘Z handler for undo delete.
+            Button("Undo") {
+                performUndo()
+            }
+            .keyboardShortcut("z", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
         .onAppear { viewModel.load() }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.undoEntry != nil)
     }
 
     // MARK: - Search helpers
@@ -130,6 +160,51 @@ struct PopoverRootView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Undo toast
+
+    private var undoToast: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "trash")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            Text("Deleted")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.primary)
+            Spacer()
+            Button {
+                performUndo()
+            } label: {
+                Text("Undo ⌘Z")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func performUndo() {
+        undoTimer?.invalidate()
+        undoTimer = nil
+        viewModel.undoDelete()
+    }
+
+    private func scheduleUndoDismissal() {
+        undoTimer?.invalidate()
+        undoTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                viewModel.undoEntry = nil
+            }
+        }
     }
 
     // MARK: - Header

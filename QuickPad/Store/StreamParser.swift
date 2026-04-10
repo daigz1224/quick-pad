@@ -99,10 +99,16 @@ enum StreamParser {
             return unknown(rawLine: rawLine)
         }
         let typeToken = String(rest[rest.index(after: rest.startIndex)..<closeIdx])
-        guard let bulletType = BulletType.parse(token: typeToken) else {
+
+        // Strip `>deleted` suffix before parsing the bullet type so
+        // `[note>deleted]` and `[task>done>deleted]` parse correctly.
+        let isDeleted = typeToken.contains(">deleted")
+        let cleanedToken = typeToken.replacingOccurrences(of: ">deleted", with: "")
+
+        guard let bulletType = BulletType.parse(token: cleanedToken) else {
             return unknown(rawLine: rawLine)
         }
-        let taskState: TaskState? = (bulletType == .task) ? TaskState.parse(token: typeToken) : nil
+        let taskState: TaskState? = (bulletType == .task) ? TaskState.parse(token: cleanedToken) : nil
 
         var content = String(rest[rest.index(after: closeIdx)...])
             .trimmingCharacters(in: .whitespaces)
@@ -134,6 +140,7 @@ enum StreamParser {
             content: content,
             isPriority: isPriority,
             prefixTag: prefixTag,
+            isDeleted: isDeleted,
             rawLine: rawLine
         )
     }

@@ -14,8 +14,17 @@ final class StreamViewModel {
     /// warning instead of silently dropping user input.
     private(set) var lastWriteError: String?
 
+    /// Non-nil while an undo is available (soft-delete). Cleared after
+    /// the toast timeout or after the undo is consumed.
+    var undoEntry: StreamEntry?
+
     private let store = MarkdownFileStore()
     private let writer = StreamWriter()
+    private let mutator = StreamMutator()
+
+    /// Set by AppDelegate after wiring. Used to suppress FSEvents
+    /// self-triggered reloads during programmatic writes.
+    var fileWatcher: StreamFileWatcher?
 
     func load() {
         let result = store.load()
@@ -31,14 +40,66 @@ final class StreamViewModel {
         guard !trimmed.isEmpty else { return }
 
         do {
+            fileWatcher?.suppressNextChange()
             try writer.append(bulletType: bulletType, content: trimmed)
             lastWriteError = nil
-            // Reload from disk so we see exactly what ended up on disk
-            // (including any vim edits that raced us) rather than an
-            // optimistic in-memory version.
             load()
         } catch {
             lastWriteError = "failed to write stream.md: \(error)"
+        }
+    }
+
+    // MARK: - Mutation (Phase 1.5)
+
+    /// Edit an existing entry's content in-place. Preserves timestamp,
+    /// bullet type, and task state — only the text changes.
+    func editEntry(_ entry: StreamEntry, newContent: String) {
+        let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            lastWriteError = "Content cannot be empty."
+            return
+        }
+
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.editEntry(oldRawLine: entry.rawLine, newContent: trimmed)
+            lastWriteError = nil
+            load()
+        } catch {
+            lastWriteError = "edit failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Soft-delete an entry: marks it as `[type>deleted]` in stream.md.
+    /// Stores the entry for undo.
+    func deleteEntry(_ entry: StreamEntry) {
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.softDelete(rawLine: entry.rawLine)
+            lastWriteError = nil
+            // Store the *new* rawLine (with >deleted suffix) so undo can
+            // find the line as it now exists on disk.
+            var deletedEntry = entry
+            deletedEntry.rawLine = StreamMutator.insertDeletedSuffix(entry.rawLine)
+            deletedEntry.isDeleted = true
+            undoEntry = deletedEntry
+            load()
+        } catch {
+            lastWriteError = "delete failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Undo the most recent soft-delete.
+    func undoDelete() {
+        guard let entry = undoEntry else { return }
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.undelete(rawLine: entry.rawLine)
+            lastWriteError = nil
+            undoEntry = nil
+            load()
+        } catch {
+            lastWriteError = "undo failed: \(error.localizedDescription)"
         }
     }
 }

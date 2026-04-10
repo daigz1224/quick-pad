@@ -18,14 +18,37 @@ struct StreamListView: View {
     /// "stream.md is empty" hint; `PopoverRootView` swaps in a
     /// search-specific message when a query returns no matches.
     var emptyStateOverride: AnyView? = nil
+    /// Callbacks for Phase 1.5 mutation (edit / delete).
+    var onEdit: ((StreamEntry, String) -> Void)?
+    var onDelete: ((StreamEntry) -> Void)?
+
+    /// Sections with soft-deleted entries filtered out.
+    private var visibleSections: [StreamSection] {
+        sections.compactMap { section in
+            let visible = section.entries.filter { !$0.isDeleted }
+            guard !visible.isEmpty else {
+                // Keep section if it has a header (day separator) even
+                // with no visible entries — but only if the original
+                // section had entries. Empty headers from zero-entry
+                // days are fine to keep.
+                if section.rawHeader != nil && section.entries.isEmpty {
+                    return section
+                }
+                return nil
+            }
+            var copy = section
+            copy.entries = visible
+            return copy
+        }
+    }
 
     var body: some View {
-        if sections.isEmpty {
+        if visibleSections.isEmpty {
             emptyStateOverride ?? AnyView(defaultEmptyState)
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                    ForEach(Array(visibleSections.enumerated()), id: \.element.id) { index, section in
                         DaySeparatorView(
                             date: section.date,
                             rawHeader: section.rawHeader
@@ -35,9 +58,14 @@ struct StreamListView: View {
                         .padding(.bottom, 4)
 
                         ForEach(section.entries) { entry in
-                            StreamEntryRow(entry: entry, highlightQuery: highlightQuery)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 2)
+                            StreamEntryRow(
+                                entry: entry,
+                                highlightQuery: highlightQuery,
+                                onEdit: onEdit,
+                                onDelete: onDelete
+                            )
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 2)
                         }
                     }
                 }

@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configurePopover()
         configureHotkeys()
         configureFileWatcher()
+        // Give the view model a handle to the file watcher so it can
+        // suppress self-triggered reloads during programmatic writes.
+        viewModel.fileWatcher = fileWatcher
         viewModel.load()
     }
 

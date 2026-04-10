@@ -8,6 +8,9 @@ struct StreamEntry: Identifiable, Hashable, Codable {
     var content: String
     var isPriority: Bool
     var prefixTag: String?
+    /// True when the entry has been soft-deleted (`[type>deleted]`).
+    /// The UI hides these by default; undo restores them.
+    var isDeleted: Bool
     /// The original line from stream.md, kept verbatim so a future
     /// write-back never silently mutates content the parser did not
     /// fully understand.
@@ -21,6 +24,7 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         content: String,
         isPriority: Bool = false,
         prefixTag: String? = nil,
+        isDeleted: Bool = false,
         rawLine: String
     ) {
         self.id = id
@@ -30,6 +34,7 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         self.content = content
         self.isPriority = isPriority
         self.prefixTag = prefixTag
+        self.isDeleted = isDeleted
         self.rawLine = rawLine
     }
 

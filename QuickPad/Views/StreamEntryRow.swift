@@ -8,6 +8,14 @@ struct StreamEntryRow: View {
     /// Non-empty while the user is in search mode. Matching substrings
     /// inside `content` are highlighted with a yellow accent.
     var highlightQuery: String = ""
+    /// Called when the user edits content via context menu → Edit.
+    var onEdit: ((StreamEntry, String) -> Void)?
+    /// Called when the user soft-deletes via context menu → Delete.
+    var onDelete: ((StreamEntry) -> Void)?
+
+    @State private var isEditing: Bool = false
+    @State private var editDraft: String = ""
+    @FocusState private var isEditFocused: Bool
 
     // Fonts are defined once so content / glyph / time / tag all stay
     // locked to the same baseline. Sizes chosen so Chinese + Latin mix
@@ -25,7 +33,11 @@ struct StreamEntryRow: View {
                 .frame(width: 12, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 1) {
-                contentLine
+                if isEditing {
+                    editField
+                } else {
+                    contentLine
+                }
                 if let tag = entry.prefixTag {
                     Text(tag)
                         .font(Self.tagFont)
@@ -50,7 +62,81 @@ struct StreamEntryRow: View {
                     .offset(x: -8)
             }
         }
+        .contextMenu {
+            if entry.bulletType != .unknown {
+                Button {
+                    beginEditing()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    onDelete?(entry)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
+
+    // MARK: - Inline edit
+
+    private var editField: some View {
+        HStack(spacing: 4) {
+            TextField("content", text: $editDraft)
+                .textFieldStyle(.plain)
+                .font(Self.contentFont)
+                .tracking(-0.3)
+                .focused($isEditFocused)
+                .onSubmit(commitEdit)
+                .onExitCommand(perform: cancelEdit)
+            Button {
+                commitEdit()
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.green)
+            }
+            .buttonStyle(.plain)
+            Button {
+                cancelEdit()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 1)
+        .padding(.horizontal, 4)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func beginEditing() {
+        editDraft = entry.content
+        isEditing = true
+        // Slight delay so the TextField is in the view tree before we
+        // try to grab focus.
+        DispatchQueue.main.async {
+            isEditFocused = true
+        }
+    }
+
+    private func commitEdit() {
+        let trimmed = editDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != entry.content else {
+            cancelEdit()
+            return
+        }
+        onEdit?(entry, trimmed)
+        isEditing = false
+    }
+
+    private func cancelEdit() {
+        isEditing = false
+        editDraft = ""
+    }
+
+    // MARK: - Display
 
     private var contentLine: some View {
         let body = entry.content.isEmpty ? entry.rawLine : entry.content

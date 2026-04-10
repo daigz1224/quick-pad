@@ -42,6 +42,18 @@ final class StreamFileWatcher {
     /// 10 ms, and we'd rather reload once than three times.
     private let debounceInterval: TimeInterval = 0.1
 
+    /// When QuickPad itself writes to stream.md (edit, delete, append),
+    /// the FSEvents callback would fire and cause a redundant reload that
+    /// can interrupt an in-progress inline edit. The suppression window
+    /// tells the watcher to ignore events until this date passes.
+    private var suppressUntil: Date?
+
+    /// Call before any programmatic write to stream.md so the watcher
+    /// doesn't reload and interrupt the user.
+    func suppressNextChange(for interval: TimeInterval = 0.3) {
+        suppressUntil = Date().addingTimeInterval(interval)
+    }
+
     init(fileURL: URL = MarkdownFileStore.streamFileURL) {
         self.directory = fileURL.deletingLastPathComponent()
         self.fileName = fileURL.lastPathComponent
@@ -129,6 +141,10 @@ final class StreamFileWatcher {
     /// Called on `callbackQueue`. Filters for our target file, then
     /// schedules a debounced hop to main.
     private func handle(paths: [String]) {
+        // If we're inside a suppression window (our own write just
+        // happened), skip the event entirely.
+        if let until = suppressUntil, Date() < until { return }
+
         let hit = paths.contains { path in
             (path as NSString).lastPathComponent == fileName
         }
