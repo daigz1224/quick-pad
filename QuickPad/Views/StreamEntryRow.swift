@@ -238,35 +238,12 @@ struct StreamEntryRow: View {
 
     private var contentLine: some View {
         let body = entry.content.isEmpty ? entry.rawLine : entry.content
-        return Self.highlighted(body, query: highlightQuery)
+        return InlineMarkdown.render(body, query: highlightQuery)
             .font(Self.contentFont)
             .tracking(-0.3)
             .foregroundStyle(.primary)
             .lineSpacing(1)
             .strikethrough(entry.taskState == .cancelled)
-    }
-
-    /// Split `text` on every case-insensitive occurrence of `query`
-    /// and return a `Text` that styles the matches.
-    private static func highlighted(_ text: String, query: String) -> Text {
-        guard !query.isEmpty else { return Text(text) }
-
-        var result = Text("")
-        var cursor = text.startIndex
-        while cursor < text.endIndex,
-              let range = text.range(of: query, options: .caseInsensitive, range: cursor..<text.endIndex) {
-            if range.lowerBound > cursor {
-                result = result + Text(String(text[cursor..<range.lowerBound]))
-            }
-            result = result + Text(String(text[range]))
-                .foregroundStyle(Color.yellow)
-                .bold()
-            cursor = range.upperBound
-        }
-        if cursor < text.endIndex {
-            result = result + Text(String(text[cursor..<text.endIndex]))
-        }
-        return result
     }
 
     private var glyphColor: Color {
