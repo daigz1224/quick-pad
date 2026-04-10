@@ -124,6 +124,10 @@ struct PopoverRootView: View {
                     .keyboardShortcut("4", modifiers: .command)
                 Button("FilterAll") { typeFilter = nil }
                     .keyboardShortcut("5", modifiers: .command)
+
+                // ⌘D detach/reattach
+                Button("Detach") { popoverController.onDetachToggle?() }
+                    .keyboardShortcut("d", modifiers: .command)
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -320,7 +324,10 @@ struct PopoverRootView: View {
             Spacer()
 
             appearanceButton
-            pinButton
+            detachButton
+            if !popoverController.isDetached {
+                pinButton
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -338,6 +345,25 @@ struct PopoverRootView: View {
         }
         .buttonStyle(.plain)
         .help(appearance.tooltip)
+    }
+
+    /// Detach from popover into floating window, or reattach.
+    private var detachButton: some View {
+        Button {
+            popoverController.onDetachToggle?()
+        } label: {
+            Image(systemName: popoverController.isDetached
+                  ? "arrow.down.right.and.arrow.up.left"
+                  : "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 11))
+                .foregroundStyle(popoverController.isDetached ? Color.accentColor : .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(popoverController.isDetached
+              ? "Reattach to menu bar"
+              : "Detach to floating window")
     }
 
     @ViewBuilder

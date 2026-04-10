@@ -10,21 +10,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeyManager = HotkeyManager()
     private let fileWatcher = StreamFileWatcher()
     private var eventMonitor: Any?
+    private var floatingPanel: FloatingPanel?
+    /// Guards against `windowWillClose` firing during a programmatic
+    /// `reattachToPopover` call — we don't want the delegate to
+    /// double-clear state when we're already handling it.
+    private var isReattaching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configurePopover()
         configureHotkeys()
         configureFileWatcher()
-        // Give the view model a handle to the file watcher so it can
-        // suppress self-triggered reloads during programmatic writes.
         viewModel.fileWatcher = fileWatcher
         viewModel.load()
+
+        // Wire the detach/reattach toggle.
+        popoverController.onDetachToggle = { [weak self] in
+            self?.toggleDetach()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyManager.unregister()
         fileWatcher.stop()
+        floatingPanel?.close()
+        floatingPanel = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -50,7 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if event?.type == .rightMouseUp {
             showContextMenu(from: sender)
         } else {
-            togglePopover(sender)
+            // If floating panel is open, bring it to front instead.
+            if let panel = floatingPanel, panel.isVisible {
+                panel.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            } else {
+                togglePopover(sender)
+            }
         }
     }
 
@@ -65,7 +81,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         statusItem.menu = menu
         button.performClick(nil)
-        // Detach menu so left-click reverts to popover behaviour next time.
         statusItem.menu = nil
     }
 
@@ -81,7 +96,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .environment(viewModel)
                 .environment(popoverController)
         )
-        // Give the pin button a handle to mutate behavior at runtime.
         popoverController.popover = popover
     }
 
@@ -93,20 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Opens the popover if it isn't already, reloads stream.md, and
-    /// brings QuickPad forward so the `InputBar` TextField can receive
-    /// keystrokes even when another app was frontmost (this is the hot
-    /// path for the ⌥N / ⌥⇧N global hotkeys).
-    ///
-    /// Notes on the "everything looks selected" artifact: we rely on
-    /// `.focusEffectDisabled()` on the SwiftUI root + `@FocusState` in
-    /// `InputBar` landing first-responder on the text field itself
-    /// (never on a button), so `makeKey()` no longer paints that bright
-    /// outline around the first focusable header button.
     private func showPopover() {
         guard let button = statusItem.button else { return }
-        // Reload from disk on every open so vim/grep edits show up
-        // even before the FSEvents watcher lands.
         viewModel.load()
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -115,14 +117,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController?.view.window?.makeKey()
     }
 
+    // MARK: - Floating window
+
+    private func toggleDetach() {
+        if popoverController.isDetached {
+            reattachToPopover()
+        } else {
+            detachToFloatingWindow()
+        }
+    }
+
+    private func detachToFloatingWindow() {
+        // Close the popover first.
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+
+        // Create the floating panel on the same screen as the status item.
+        let targetScreen = statusItem.button?.window?.screen
+        let panel = FloatingPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
+            targetScreen: targetScreen
+        )
+        let hostingView = NSHostingController(
+            rootView: PopoverRootView()
+                .environment(viewModel)
+                .environment(popoverController)
+        )
+        panel.contentViewController = hostingView
+
+        // Watch for the panel being closed via the red button.
+        panel.delegate = self
+
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        floatingPanel = panel
+        popoverController.isDetached = true
+    }
+
+    private func reattachToPopover() {
+        isReattaching = true
+        floatingPanel?.close()
+        floatingPanel = nil
+        popoverController.isDetached = false
+        isReattaching = false
+
+        // Re-open as popover.
+        showPopover()
+    }
+
     // MARK: - File watcher
 
     private func configureFileWatcher() {
         fileWatcher.onChange = { [weak self] in
-            // FSEvents fires for our own writes too — `StreamViewModel.append`
-            // already reloads eagerly, so a second reload here is a
-            // no-op but strictly correct (catches races where vim and
-            // QuickPad both touch the file between ticks).
             self?.viewModel.load()
         }
         fileWatcher.start()
@@ -135,15 +183,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             switch action {
             case .togglePopover:
-                // ⌥N — mirrors clicking the menu bar icon.
-                self.togglePopover(nil)
+                if let panel = self.floatingPanel, panel.isVisible {
+                    panel.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                } else {
+                    self.togglePopover(nil)
+                }
             case .quickCapture:
-                // ⌥⇧N — "always open, never close". Hammering on this
-                // from another app should never accidentally hide the
-                // popover mid-thought.
-                self.showPopover()
+                if let panel = self.floatingPanel, panel.isVisible {
+                    panel.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                } else {
+                    self.showPopover()
+                }
             }
         }
         hotkeyManager.register()
+    }
+}
+
+// MARK: - NSWindowDelegate
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === floatingPanel,
+              !isReattaching else { return }
+        // User closed the floating panel via the red button —
+        // revert to popover mode (but don't auto-open the popover).
+        floatingPanel = nil
+        popoverController.isDetached = false
     }
 }

@@ -1,14 +1,16 @@
 import AppKit
 import Observation
 
-/// Bridges AppKit's `NSPopover` to the SwiftUI view layer. Holds a weak
-/// reference to the popover so the pin button can flip `behavior`
-/// between `.transient` (auto-dismiss on outside click) and
-/// `.applicationDefined` (stays until the user explicitly closes it).
+/// Bridges AppKit window management to the SwiftUI view layer. Manages
+/// two modes:
 ///
-/// Phase 3 in the architecture doc describes a more elaborate
-/// "drag-to-detach" floating-window pin; this is the lightweight
-/// precursor — same mental model, much less plumbing.
+/// 1. **Popover mode** (default) — attached to the menu bar status item.
+///    The pin button toggles between `.transient` (auto-dismiss) and
+///    `.applicationDefined` (stays open).
+///
+/// 2. **Floating mode** — detached into a standalone `FloatingPanel` that
+///    stays on top of all windows. Triggered by the detach button (⌘D)
+///    in the header.
 @Observable
 final class PopoverController {
     /// Injected by `AppDelegate` after the popover is built.
@@ -17,4 +19,13 @@ final class PopoverController {
     var isPinned: Bool = false {
         didSet { popover?.behavior = isPinned ? .applicationDefined : .transient }
     }
+
+    /// True when the UI is showing in a floating window instead of the
+    /// menu-bar popover. Drives the header's detach/reattach button.
+    var isDetached: Bool = false
+
+    /// Called by the SwiftUI layer when the user clicks detach/reattach.
+    /// The actual window management is handled by AppDelegate via this
+    /// callback. Ignored by Observation — closures are not view state.
+    @ObservationIgnored var onDetachToggle: (() -> Void)?
 }
