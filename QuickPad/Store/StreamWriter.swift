@@ -1,23 +1,20 @@
 import Foundation
 
-/// Append-only writer for `~/.quickpad/stream.md`. Kept deliberately
-/// tiny: the only operation this milestone needs is "add one entry to
-/// today's section". Everything is atomic (temp file + rename) so a
-/// crash mid-write can never leave stream.md in a half-baked state.
-///
-/// The writer never touches lines it didn't add — the architecture doc
-/// is explicit that vim edits and QuickPad edits must coexist, so we
-/// preserve every existing byte and only append at the tail.
+/// Writer for `~/.quickpad/stream.md`. New entries are **prepended**
+/// at the top of today's section (newest-first within a day, newest
+/// day at the top of the file). Everything is atomic (temp file +
+/// rename) so a crash mid-write can never leave stream.md in a
+/// half-baked state.
 struct StreamWriter {
 
     enum WriteError: Error {
         case emptyContent
     }
 
-    /// Append a new entry for `bulletType + content` to stream.md. If the
-    /// file's last day separator isn't today's, a new separator is
-    /// inserted first. Timestamp defaults to `Date()` but is injectable
-    /// so tests / future features (e.g. backfill) can supply their own.
+    /// Prepend a new entry for `bulletType + content` to today's section
+    /// in stream.md. If today's separator doesn't exist yet, it is
+    /// created at the top of the file. Timestamp defaults to `Date()`
+    /// but is injectable for tests / future features (e.g. backfill).
     @discardableResult
     func append(
         bulletType: BulletType,
@@ -60,11 +57,12 @@ struct StreamWriter {
     /// Pure function so it's trivially testable without touching the FS.
     ///
     /// Cosmetic contract:
-    /// - Same-day entries are contiguous (single newline between them).
+    /// - Newest day is at the **top** of the file (reverse-chronological).
+    /// - Within a day, newest entries come first (prepended after the
+    ///   separator).
+    /// - A blank line sits between a day separator and its first entry.
     /// - A blank line sits between the last entry of a day and the
     ///   next day's separator.
-    /// - A blank line sits between a day separator and its first entry
-    ///   (matches the shape of `sample-stream.md` and reads well in vim).
     /// - The file always ends with exactly one trailing newline; no
     ///   accumulation across repeated appends.
     static func buildAppended(
@@ -73,61 +71,53 @@ struct StreamWriter {
         content: String,
         now: Date
     ) -> String {
-        // Normalize: strip any existing trailing whitespace / newlines
-        // so we control the file's tail shape ourselves.
-        var base = existing
-        while let last = base.last, last == "\n" || last == "\r" || last == " " || last == "\t" {
-            base.removeLast()
+        let newLine = entryLine(bulletType: bulletType, content: content, now: now)
+
+        // Empty file: separator + entry.
+        if existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return separatorLine(for: now) + "\n\n" + newLine + "\n"
         }
 
-        let todayHeader = separatorLine(for: now)
-        let needsSeparator = !hasSeparatorForToday(in: base, now: now)
+        let lines = existing.components(separatedBy: "\n")
+        let todayTarget = isoDayFormatter.string(from: now)
 
-        var out = base
-        if needsSeparator {
-            // Crossing a day boundary (or starting from an empty file).
-            // A blank line separates yesterday's last entry from the
-            // new day's header; a blank line after the header sets up
-            // the day's first entry.
-            if !out.isEmpty {
-                out.append("\n\n")
+        // Find today's separator index.
+        if let sepIdx = lines.firstIndex(where: { isTodaySeparator($0, target: todayTarget) }) {
+            // Insert the new entry right after the separator (+ any blank
+            // line that follows it).
+            var insertIdx = sepIdx + 1
+            // Skip one blank line after separator if present.
+            if insertIdx < lines.count && lines[insertIdx].trimmingCharacters(in: .whitespaces).isEmpty {
+                insertIdx += 1
             }
-            out.append(todayHeader)
-            out.append("\n\n")
-        } else if !out.isEmpty {
-            // Same-day append: entries are contiguous, single newline.
-            out.append("\n")
+            var result = lines
+            result.insert(newLine, at: insertIdx)
+            return normalizeTrailingNewline(result.joined(separator: "\n"))
         }
-        out.append(entryLine(
-            bulletType: bulletType,
-            content: content,
-            now: now
-        ))
-        out.append("\n")
-        return out
+
+        // Today's separator doesn't exist yet — prepend it at the top.
+        let header = separatorLine(for: now)
+        var result = [header, "", newLine, ""]
+        result.append(contentsOf: lines)
+        return normalizeTrailingNewline(result.joined(separator: "\n"))
     }
 
-    /// Check whether the existing text already has a day separator for
-    /// `now`'s calendar date. We only look at the *last* separator:
-    /// QuickPad is append-only, so if the tail belongs to today we're
-    /// fine; if it belongs to yesterday we need to insert a new one.
-    private static func hasSeparatorForToday(in text: String, now: Date) -> Bool {
-        let target = isoDayFormatter.string(from: now)
-        // Scan lines from the bottom up looking for the most recent
-        // separator. The parser's format is `--- YYYY-MM-DD Weekday ---`.
-        let lines = text.components(separatedBy: "\n")
-        for line in lines.reversed() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("---"), trimmed.hasSuffix("---") else {
-                continue
-            }
-            let stripped = trimmed
-                .trimmingCharacters(in: CharacterSet(charactersIn: "- "))
-                .trimmingCharacters(in: .whitespaces)
-            let token = stripped.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-            return token == target
-        }
-        return false
+    /// Check if a line is the separator for the target date.
+    private static func isTodaySeparator(_ line: String, target: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("---"), trimmed.hasSuffix("---") else { return false }
+        let stripped = trimmed
+            .trimmingCharacters(in: CharacterSet(charactersIn: "- "))
+            .trimmingCharacters(in: .whitespaces)
+        let token = stripped.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+        return token == target
+    }
+
+    /// Ensure the text ends with exactly one newline.
+    private static func normalizeTrailingNewline(_ text: String) -> String {
+        var s = text
+        while s.hasSuffix("\n") { s.removeLast() }
+        return s + "\n"
     }
 
     /// `--- 2026-04-09 Thursday ---`

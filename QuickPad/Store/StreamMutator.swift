@@ -130,10 +130,12 @@ struct StreamMutator {
                 insertIdx += 1
             }
         } else {
-            // No today separator yet — insert at the top of the file.
-            lines.insert("", at: 0)
+            // No today separator yet — prepend at the top of the file.
+            // Layout: separator, blank, entry, blank, ...old content...
+            lines.insert("", at: 0)   // blank line between new entry and old content
+            lines.insert("", at: 0)   // blank line after separator (entry goes here)
             lines.insert(todaySep, at: 0)
-            insertIdx = 2
+            insertIdx = 2             // right after separator + blank line
         }
 
         lines.insert(newLine, at: insertIdx)

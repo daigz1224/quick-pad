@@ -105,6 +105,7 @@ final class StreamWriterTests: XCTestCase {
     func testSameDayAppendHasNoBlankLineBetweenEntries() {
         // The cosmetic contract: same-day entries are contiguous. A
         // blank line between entries is only used to separate days.
+        // Newest entry is prepended (appears first within the day).
         let first = makeDate(2026, 4, 9, 10, 0, 0)
         let second = makeDate(2026, 4, 9, 11, 0, 0)
 
@@ -124,8 +125,8 @@ final class StreamWriterTests: XCTestCase {
         let expected = """
         \(expectedSeparator(for: first))
 
-        - \(expectedTimestamp(for: first)) [note] first
         - \(expectedTimestamp(for: second)) [task] second
+        - \(expectedTimestamp(for: first)) [note] first
 
         """
         XCTAssertEqual(afterSecond, expected)
@@ -158,8 +159,7 @@ final class StreamWriterTests: XCTestCase {
 
     func testNewDayAppendInsertsSeparatorWithBlankLineBoundary() {
         // Yesterday's content already in the file, today's append
-        // should insert a new day separator and leave a blank line
-        // boundary between the old day and the new one.
+        // should prepend today's section at the top. Newest day first.
         let yesterday = makeDate(2026, 4, 8, 15, 0, 0)
         let today = makeDate(2026, 4, 9, 10, 0, 0)
 
@@ -177,13 +177,13 @@ final class StreamWriterTests: XCTestCase {
         )
 
         let expected = """
-        \(expectedSeparator(for: yesterday))
-
-        - \(expectedTimestamp(for: yesterday)) [note] yesterday's entry
-
         \(expectedSeparator(for: today))
 
         - \(expectedTimestamp(for: today)) [idea] today's entry
+
+        \(expectedSeparator(for: yesterday))
+
+        - \(expectedTimestamp(for: yesterday)) [note] yesterday's entry
 
         """
         XCTAssertEqual(out, expected)
@@ -290,14 +290,16 @@ final class StreamWriterTests: XCTestCase {
 
         let sections = StreamParser.parse(text)
         XCTAssertEqual(sections.count, 2)
-        XCTAssertEqual(sections[0].entries.count, 2)
-        XCTAssertEqual(sections[0].entries[0].content, "first")
-        XCTAssertEqual(sections[0].entries[0].bulletType, .note)
-        XCTAssertEqual(sections[0].entries[1].content, "second")
-        XCTAssertEqual(sections[0].entries[1].bulletType, .task)
-        XCTAssertEqual(sections[1].entries.count, 1)
-        XCTAssertEqual(sections[1].entries[0].content, "third")
-        XCTAssertEqual(sections[1].entries[0].bulletType, .idea)
+        // Newest day (Apr 10) is first in the file.
+        XCTAssertEqual(sections[0].entries.count, 1)
+        XCTAssertEqual(sections[0].entries[0].content, "third")
+        XCTAssertEqual(sections[0].entries[0].bulletType, .idea)
+        // Older day (Apr 9) comes second, newest entry first within day.
+        XCTAssertEqual(sections[1].entries.count, 2)
+        XCTAssertEqual(sections[1].entries[0].content, "second")
+        XCTAssertEqual(sections[1].entries[0].bulletType, .task)
+        XCTAssertEqual(sections[1].entries[1].content, "first")
+        XCTAssertEqual(sections[1].entries[1].bulletType, .note)
     }
 
     // MARK: - append(...): filesystem integration
