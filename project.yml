@@ -56,3 +56,33 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES
+
+  QuickPadTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: QuickPadTests
+    dependencies:
+      - target: QuickPad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.quickpad.QuickPadTests
+        PRODUCT_NAME: QuickPadTests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/QuickPad.app/Contents/MacOS/QuickPad"
+        SWIFT_VERSION: "5.9"
+
+schemes:
+  QuickPad:
+    build:
+      targets:
+        QuickPad: all
+        QuickPadTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - QuickPadTests

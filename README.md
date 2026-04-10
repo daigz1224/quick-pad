@@ -38,6 +38,19 @@ Or open `QuickPad.xcodeproj` in Xcode and run.
 `QuickPad.xcodeproj` is gitignored — regenerate it any time `project.yml`
 changes.
 
+## Tests
+
+```sh
+xcodebuild -project QuickPad.xcodeproj -scheme QuickPad \
+  -configuration Debug test -destination 'platform=macOS'
+```
+
+Unit tests cover the pure-logic layer: `StreamParser`, `StreamWriter`
+(including FS-integration via temp dirs), `BulletType`, and `TaskState`.
+UI / hotkey / file-watcher layers are deliberately not unit-tested —
+they depend on AppKit, Carbon, and FSEvents callbacks that are only
+meaningfully exercised by running the app.
+
 ## Usage
 
 Click the menu bar icon (three horizontal bullet lines) or press **⌥N**

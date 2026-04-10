@@ -58,17 +58,25 @@ struct StreamWriter {
     // MARK: - Text assembly
 
     /// Pure function so it's trivially testable without touching the FS.
+    ///
+    /// Cosmetic contract:
+    /// - Same-day entries are contiguous (single newline between them).
+    /// - A blank line sits between the last entry of a day and the
+    ///   next day's separator.
+    /// - A blank line sits between a day separator and its first entry
+    ///   (matches the shape of `sample-stream.md` and reads well in vim).
+    /// - The file always ends with exactly one trailing newline; no
+    ///   accumulation across repeated appends.
     static func buildAppended(
         existing: String,
         bulletType: BulletType,
         content: String,
         now: Date
     ) -> String {
-        // Normalize: we always end the file with exactly one trailing
-        // newline. Strip any existing trailing whitespace/newlines, then
-        // re-add a single newline at the very end.
+        // Normalize: strip any existing trailing whitespace / newlines
+        // so we control the file's tail shape ourselves.
         var base = existing
-        while let last = base.last, last == "\n" || last == "\r" || last == " " {
+        while let last = base.last, last == "\n" || last == "\r" || last == " " || last == "\t" {
             base.removeLast()
         }
 
@@ -76,13 +84,18 @@ struct StreamWriter {
         let needsSeparator = !hasSeparatorForToday(in: base, now: now)
 
         var out = base
-        if !out.isEmpty {
-            // Blank line between the previous day's last entry (or the
-            // file start) and whatever we're about to append.
-            out.append("\n\n")
-        }
         if needsSeparator {
+            // Crossing a day boundary (or starting from an empty file).
+            // A blank line separates yesterday's last entry from the
+            // new day's header; a blank line after the header sets up
+            // the day's first entry.
+            if !out.isEmpty {
+                out.append("\n\n")
+            }
             out.append(todayHeader)
+            out.append("\n\n")
+        } else if !out.isEmpty {
+            // Same-day append: entries are contiguous, single newline.
             out.append("\n")
         }
         out.append(entryLine(
