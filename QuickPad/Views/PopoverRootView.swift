@@ -125,6 +125,10 @@ struct PopoverRootView: View {
                 Button("FilterAll") { typeFilter = nil }
                     .keyboardShortcut("5", modifiers: .command)
 
+                // ⌘E export
+                Button("Export") { StreamExporter.savePanel(sections: filteredSections) }
+                    .keyboardShortcut("e", modifiers: .command)
+
                 // ⌘D detach/reattach
                 Button("Detach") { popoverController.onDetachToggle?() }
                     .keyboardShortcut("d", modifiers: .command)
@@ -323,6 +327,7 @@ struct PopoverRootView: View {
             }
             Spacer()
 
+            exportButton
             appearanceButton
             detachButton
             if !popoverController.isDetached {
@@ -331,6 +336,20 @@ struct PopoverRootView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var exportButton: some View {
+        Button {
+            StreamExporter.savePanel(sections: filteredSections)
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Export visible entries (⌘E)")
     }
 
     private var appearanceButton: some View {
