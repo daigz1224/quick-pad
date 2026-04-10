@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fileWatcher = StreamFileWatcher()
     private var eventMonitor: Any?
     private var floatingPanel: FloatingPanel?
+    private let archiver = StreamArchiver()
+    private var archiveTimer: Timer?
     /// Guards against `windowWillClose` firing during a programmatic
     /// `reattachToPopover` call — we don't want the delegate to
     /// double-clear state when we're already handling it.
@@ -23,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureFileWatcher()
         viewModel.fileWatcher = fileWatcher
         viewModel.load()
+        runArchiveAndSchedule()
 
         // Wire the detach/reattach toggle.
         popoverController.onDetachToggle = { [weak self] in
@@ -31,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        archiveTimer?.invalidate()
+        archiveTimer = nil
         hotkeyManager.unregister()
         fileWatcher.stop()
         floatingPanel?.close()
@@ -165,6 +170,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Re-open as popover.
         showPopover()
+    }
+
+    // MARK: - Auto-archive
+
+    private func runArchiveAndSchedule() {
+        // Run once on launch.
+        runArchive()
+        // Then every hour.
+        archiveTimer = Timer.scheduledTimer(
+            withTimeInterval: 3600,
+            repeats: true
+        ) { [weak self] _ in
+            self?.runArchive()
+        }
+    }
+
+    private func runArchive() {
+        do {
+            fileWatcher.suppressNextChange()
+            let result = try archiver.run()
+            if result.archivedCount > 0 || result.cleanedDeletedCount > 0 {
+                viewModel.load()
+            }
+        } catch {
+            // Archive failure is non-critical — log but don't surface.
+            print("[QuickPad] archive error: \(error)")
+        }
     }
 
     // MARK: - File watcher
