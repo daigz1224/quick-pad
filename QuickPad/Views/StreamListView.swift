@@ -58,7 +58,7 @@ struct StreamListView: View {
                             date: section.date,
                             rawHeader: section.rawHeader
                         )
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 10)
                         .padding(.top, index == 0 ? 6 : 10)
                         .padding(.bottom, 4)
 
@@ -71,7 +71,7 @@ struct StreamListView: View {
                                 onRescue: onRescue,
                                 onTaskStateChange: onTaskStateChange
                             )
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 2)
                         }
                     }

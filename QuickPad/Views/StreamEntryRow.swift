@@ -24,7 +24,7 @@ struct StreamEntryRow: View {
     // Fonts are defined once so content / glyph / time / tag all stay
     // locked to the same baseline. Sizes chosen so Chinese + Latin mix
     // stays readable in a 420-wide popover without wrapping too aggressively.
-    private static let contentFont = Font.system(size: 12, design: .monospaced)
+    private static let contentFont = Font.system(size: 11)
     private static let timeFont = Font.system(size: 10, design: .monospaced)
     private static let tagFont = Font.system(size: 9, design: .monospaced)
 
@@ -53,7 +53,7 @@ struct StreamEntryRow: View {
             Spacer(minLength: 6)
 
             trailingLabel
-                .frame(width: 52, alignment: .trailing)
+                .frame(width: 46, alignment: .trailing)
         }
         .overlay(alignment: .leading) {
             if entry.isPriority {
@@ -150,7 +150,7 @@ struct StreamEntryRow: View {
             TextField("content", text: $editDraft)
                 .textFieldStyle(.plain)
                 .font(Self.contentFont)
-                .tracking(-0.3)
+                .tracking(-0.15)
                 .focused($isEditFocused)
                 .onSubmit(commitEdit)
                 .onExitCommand(perform: cancelEdit)
@@ -211,7 +211,7 @@ struct StreamEntryRow: View {
                 } label: {
                     Text(entry.displayGlyph)
                         .font(Self.contentFont)
-                        .tracking(-0.3)
+                        .tracking(-0.15)
                         .foregroundStyle(glyphColor)
                         .frame(width: 12, alignment: .leading)
                         .contentShape(Rectangle())
@@ -220,7 +220,7 @@ struct StreamEntryRow: View {
             } else {
                 Text(entry.displayGlyph)
                     .font(Self.contentFont)
-                    .tracking(-0.3)
+                    .tracking(-0.15)
                     .foregroundStyle(glyphColor)
                     .frame(width: 12, alignment: .leading)
             }
@@ -231,7 +231,7 @@ struct StreamEntryRow: View {
         let body = entry.content.isEmpty ? entry.rawLine : entry.content
         return InlineMarkdown.render(body, query: highlightQuery)
             .font(Self.contentFont)
-            .tracking(-0.3)
+            .tracking(-0.15)
             .foregroundStyle(.primary)
             .lineSpacing(1)
             .strikethrough(entry.taskState == .cancelled)
