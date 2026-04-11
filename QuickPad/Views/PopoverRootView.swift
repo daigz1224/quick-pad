@@ -261,9 +261,14 @@ struct PopoverRootView: View {
     }
 
     private func performUndo() {
-        undoTimer?.invalidate()
-        undoTimer = nil
-        viewModel.undoDelete()
+        // Rescue undo takes priority if both are active.
+        if rescueToast != nil && viewModel.undoRescueSnapshot != nil {
+            performUndoRescue()
+        } else {
+            undoTimer?.invalidate()
+            undoTimer = nil
+            viewModel.undoDelete()
+        }
     }
 
     private func scheduleUndoDismissal() {
@@ -285,6 +290,15 @@ struct PopoverRootView: View {
             Text(message)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.primary)
+            Spacer()
+            Button {
+                performUndoRescue()
+            } label: {
+                Text("Undo ⌘Z")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -299,11 +313,19 @@ struct PopoverRootView: View {
     private func showRescueToast() {
         rescueTimer?.invalidate()
         rescueToast = "rescued ↑ back to today"
-        rescueTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+        rescueTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
             DispatchQueue.main.async {
                 rescueToast = nil
+                viewModel.undoRescueSnapshot = nil
             }
         }
+    }
+
+    private func performUndoRescue() {
+        rescueTimer?.invalidate()
+        rescueTimer = nil
+        rescueToast = nil
+        viewModel.undoRescue()
     }
 
     // MARK: - Header

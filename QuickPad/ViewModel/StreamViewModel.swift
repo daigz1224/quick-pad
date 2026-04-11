@@ -18,6 +18,9 @@ final class StreamViewModel {
     /// the toast timeout or after the undo is consumed.
     var undoEntry: StreamEntry?
 
+    /// Snapshot of stream.md before the last rescue, for undo.
+    var undoRescueSnapshot: String?
+
     private let store = MarkdownFileStore()
     private let writer = StreamWriter()
     private let mutator = StreamMutator()
@@ -93,14 +96,35 @@ final class StreamViewModel {
 
     /// Rescue an entry: remove from its current position, update timestamp
     /// to now, and insert at the top of today's section.
+    /// Saves a file snapshot for undo.
     func rescueEntry(_ entry: StreamEntry) {
         do {
+            // Snapshot for undo.
+            let fileURL = MarkdownFileStore.streamFileURL
+            undoRescueSnapshot = try? String(contentsOf: fileURL, encoding: .utf8)
+
             fileWatcher?.suppressNextChange()
             try mutator.rescue(rawLine: entry.rawLine)
             lastWriteError = nil
             load()
         } catch {
+            undoRescueSnapshot = nil
             lastWriteError = "rescue failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Undo the most recent rescue by restoring the file snapshot.
+    func undoRescue() {
+        guard let snapshot = undoRescueSnapshot else { return }
+        do {
+            fileWatcher?.suppressNextChange()
+            let fileURL = MarkdownFileStore.streamFileURL
+            try snapshot.write(to: fileURL, atomically: true, encoding: .utf8)
+            undoRescueSnapshot = nil
+            lastWriteError = nil
+            load()
+        } catch {
+            lastWriteError = "undo rescue failed: \(error.localizedDescription)"
         }
     }
 

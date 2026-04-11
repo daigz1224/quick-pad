@@ -52,17 +52,8 @@ struct StreamEntryRow: View {
 
             Spacer(minLength: 6)
 
-            if isHovering && isRescuable {
-                Text("↑ rescue")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.blue.opacity(0.7))
-                    .fixedSize()
-            } else if let time = timeLabel {
-                Text(time)
-                    .font(Self.timeFont)
-                    .foregroundStyle(.tertiary)
-                    .fixedSize()
-            }
+            trailingLabel
+                .frame(width: 52, alignment: .trailing)
         }
         .overlay(alignment: .leading) {
             if entry.isPriority {
@@ -244,6 +235,21 @@ struct StreamEntryRow: View {
             .foregroundStyle(.primary)
             .lineSpacing(1)
             .strikethrough(entry.taskState == .cancelled)
+    }
+
+    @ViewBuilder
+    private var trailingLabel: some View {
+        if isHovering && isRescuable {
+            Text("↑ rescue")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.blue.opacity(0.7))
+                .fixedSize()
+        } else if let time = timeLabel {
+            Text(time)
+                .font(Self.timeFont)
+                .foregroundStyle(.tertiary)
+                .fixedSize()
+        }
     }
 
     private var glyphColor: Color {

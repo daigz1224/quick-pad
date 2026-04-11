@@ -53,7 +53,10 @@ struct StreamEntry: Identifiable, Hashable, Codable {
     /// produces a stale opacity.
     var ageInDays: Int {
         guard let timestamp else { return 0 }
-        return max(0, Calendar.current.dateComponents([.day], from: timestamp, to: Date()).day ?? 0)
+        let cal = Calendar.current
+        let entryDay = cal.startOfDay(for: timestamp)
+        let today = cal.startOfDay(for: Date())
+        return max(0, cal.dateComponents([.day], from: entryDay, to: today).day ?? 0)
     }
 
     /// Opacity driven by the gravity-decay curve from `ARCHITECTURE.md`.
