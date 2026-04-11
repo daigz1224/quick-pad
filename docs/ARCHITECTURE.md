@@ -549,40 +549,50 @@ func rescueEntry(_ entry: StreamEntry) {
 
 ### Phase 1 — MVP（能日常使用）
 
-- [ ] 菜单栏常驻 NSStatusItem + NSPopover
-- [ ] Stream 列表渲染（SwiftUI List）
-- [ ] 输入区：bullet type 切换 + 回车追加
-- [ ] stream.md 读写 + 日期分割线解析
-- [ ] 全局热键 ⌥N (toggle) + ⌥⇧N (quick append)
-- [ ] FSEvents 文件监控（vim 编辑同步）
-- [ ] ⌘F 全文搜索
+- [x] 菜单栏常驻 NSStatusItem + NSPopover
+- [x] Stream 列表渲染（SwiftUI LazyVStack）
+- [x] 输入区：bullet type 切换 + 回车追加
+- [x] stream.md 读写 + 日期分割线解析
+- [x] 全局热键 ⌥N (toggle) + ⌥⇧N (quick append)
+- [x] FSEvents 文件监控（vim 编辑同步）
+- [x] ⌘F 全文搜索
+- [x] Pin 按钮保持 popover 不关闭
+
+### Phase 1.5 — 编辑 + 软删除
+
+- [x] 右键菜单 → 编辑条目（保留时间戳）
+- [x] 右键菜单 → 软删除（`[type>deleted]` 标记）
+- [x] 撤销删除（⌘Z，5 秒窗口）
 
 ### Phase 2 — 重力系统 + BuJo 交互
 
-- [ ] Opacity 衰减渲染
-- [ ] 日期分割线自动插入
-- [ ] 点击条目上浮（rescue 动画）
-- [ ] Task 状态切换（done / migrated / cancelled）
-- [ ] 完成 task 自动沉入 DONE 折叠区
-- [ ] 前缀自动识别（read: / watch: / * priority）
-- [ ] 按类型过滤 ⌘1-5
+- [x] Opacity 衰减渲染（6 级透明度曲线）
+- [x] 日期分割线标签衰减（TODAY → YESTERDAY → APR 6 · SUN → MAR 20）
+- [x] Hover 旧条目 → 点击上浮 rescue（更新时间戳到今天）
+- [x] 撤销 rescue（⌘Z，5 秒窗口，文件快照恢复）
+- [x] Task 状态切换（点击 glyph: pending ↔ done；右键: migrated / cancelled）
+- [x] 前缀自动识别（read: / watch: / listen: / ? → 标签列）
+- [x] `*priority` 标记 → 红色左边框
+- [x] 按类型过滤 ⌘1-4，⌘5 清除
 
-### Phase 3 — 浮动窗口 + 毕业机制
+### Phase 3 — 浮动窗口
 
-- [ ] Popover 拖拽拆出为浮动窗口
-- [ ] 浮动窗口置顶（NSWindow.level = .floating）
-- [ ] Pinned Notes + 毕业 ⌘⇧G
-- [ ] 条目合并 ⌘M
-- [ ] config.toml 自定义快捷键 + 外观
+- [x] ⌘D 拆出为浮动窗口 / 合回 popover
+- [x] 浮动窗口置顶（NSPanel.level = .floating）
+- [x] 多显示器感知（跟随 status item 所在屏幕）
+- [ ] ~~Pinned Notes + 毕业 ⌘⇧G~~ — 跳过，保持 KISS
+- [ ] ~~条目合并 ⌘M~~ — 跳过
+- [ ] ~~config.toml~~ — 跳过
 
 ### Phase 4 — 润色
 
-- [ ] Markdown 行内实时渲染
-- [ ] TODO 自动按月归档
-- [ ] 软删除 + 回收站（30天）
-- [ ] 导出（纯文本 / Markdown / HTML）
-- [ ] 深色/浅色主题跟随系统
-- [ ] Hint bar 可隐藏
+- [x] Markdown 行内渲染（code、bold、link）
+- [x] 已完成任务按月自动归档（30 天阈值 → `~/.quickpad/archive/YYYY-MM.md`）
+- [x] 软删除条目 30 天后自动清理
+- [x] 导出可见条目为 Markdown（⌘E + NSSavePanel）
+- [x] 深色/浅色/自动主题切换
+- [x] 新条目顶部插入（newest-first）
+- [x] 日历日 ageInDays 计算（startOfDay 对齐）
 
 ---
 
