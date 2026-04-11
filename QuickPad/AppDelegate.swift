@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fileWatcher = StreamFileWatcher()
     private var eventMonitor: Any?
     private var floatingPanel: FloatingPanel?
+    private var islandPanel: IslandPanel?
+    private var isIslandExpanded = false
     private let archiver = StreamArchiver()
     private var archiveTimer: Timer?
     /// Guards against `windowWillClose` firing during a programmatic
@@ -40,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileWatcher.stop()
         floatingPanel?.close()
         floatingPanel = nil
+        islandPanel?.close()
+        islandPanel = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -77,6 +81,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showContextMenu(from button: NSStatusBarButton) {
         let menu = NSMenu()
+
+        let islandItem = NSMenuItem(
+            title: islandPanel?.isVisible == true ? "Hide Island" : "Show Island",
+            action: #selector(toggleIsland),
+            keyEquivalent: ""
+        )
+        menu.addItem(islandItem)
+        menu.addItem(.separator())
+
         menu.addItem(
             NSMenuItem(
                 title: "Quit QuickPad",
@@ -170,6 +183,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Re-open as popover.
         showPopover()
+    }
+
+    // MARK: - Island (Dynamic Island style widget)
+
+    @objc private func toggleIsland() {
+        if let panel = islandPanel, panel.isVisible {
+            hideIsland()
+        } else {
+            showIsland()
+        }
+    }
+
+    private func showIsland() {
+        if let existing = islandPanel {
+            existing.orderFrontRegardless()
+        } else {
+            isIslandExpanded = false
+            let panel = IslandPanel(screen: nil)
+
+            // SwiftUI-initiated expand/collapse just syncs panel state.
+            let handleExpandChange: (Bool) -> Void = { [weak self, weak panel] expanded in
+                self?.isIslandExpanded = expanded
+                panel?.requestExpand(expanded)
+            }
+
+            let hostingView = PassThroughHostingView(
+                rootView: IslandView(
+                    onExpandChange: handleExpandChange,
+                    onDismiss: { [weak self] in self?.hideIsland() },
+                    notchHeight: panel.notchHeight
+                )
+                .environment(viewModel)
+            )
+
+            // Hit-test: the full content area below the notch zone.
+            hostingView.hitTestRect = { [weak panel] in
+                guard let panel else { return .zero }
+                let h = panel.frame.height - panel.notchHeight
+                return CGRect(x: 0, y: 0, width: panel.frame.width, height: h)
+            }
+
+            panel.contentView = hostingView
+            panel.orderFrontRegardless()
+            panel.startHoverTracking()
+            islandPanel = panel
+
+            // Boot animation: flash open briefly, then auto-collapse.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                panel.performBootAnimation()
+            }
+        }
+    }
+
+    private func hideIsland() {
+        islandPanel?.orderOut(nil)
     }
 
     // MARK: - Auto-archive
