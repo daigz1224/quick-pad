@@ -217,16 +217,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .environment(viewModel)
             )
 
-            // Hit-test: the full content area below the notch zone.
+            // Hit-test: only the visible pill area below the notch zone.
+            // NSView.hitTest uses window coords (origin bottom-left), so
+            // the pill sits at the TOP of the window, just under the notch:
+            //
+            //   y = totalH ┌─ notch (38pt) ─┐
+            //   y = totalH - notch ├─ pill top ─┤
+            //   y = totalH - notch - pillH ├─ pill bottom ─┤
+            //   y = 0      └────────────────┘
+            //
             hostingView.hitTestRect = { [weak panel] in
                 guard let panel else { return .zero }
-                let h = panel.frame.height - panel.notchHeight
-                return CGRect(x: 0, y: 0, width: panel.frame.width, height: h)
+                let totalH = panel.frame.height
+                let notch = panel.notchHeight
+                let pillH = panel.isExpanded
+                    ? IslandPanel.expandedHeight
+                    : IslandPanel.compactHeight
+                let pillW = panel.isExpanded
+                    ? IslandPanel.expandedWidth
+                    : IslandPanel.compactWidth
+                let x = (panel.frame.width - pillW) / 2
+                let y = totalH - notch - pillH
+                return CGRect(x: x, y: y, width: pillW, height: pillH)
             }
 
             panel.contentView = hostingView
             panel.orderFrontRegardless()
             panel.startHoverTracking()
+            panel.installGlobalClickMonitor()
             islandPanel = panel
 
             // Boot animation: flash open briefly, then auto-collapse.

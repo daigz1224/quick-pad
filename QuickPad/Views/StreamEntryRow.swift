@@ -15,10 +15,13 @@ struct StreamEntryRow: View {
     var onRescue: ((StreamEntry) -> Void)?
     /// Called when the user toggles a task's state.
     var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
+    /// Called when the user changes the bullet type via context menu.
+    var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
 
     @State private var isEditing: Bool = false
     @State private var editDraft: String = ""
     @State private var isHovering: Bool = false
+    @State private var justToggled: Bool = false
     @FocusState private var isEditFocused: Bool
 
     // Fonts are defined once so content / glyph / time / tag all stay
@@ -47,6 +50,9 @@ struct StreamEntryRow: View {
                     Text(tag)
                         .font(Self.tagFont)
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.08), in: Capsule())
                 }
             }
 
@@ -54,15 +60,22 @@ struct StreamEntryRow: View {
 
             trailingLabel
                 .frame(width: 46, alignment: .trailing)
+                .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
         .overlay(alignment: .leading) {
             if entry.isPriority {
-                Rectangle()
-                    .fill(Color.red)
+                Capsule()
+                    .fill(Theme.priority)
                     .frame(width: 2)
-                    .offset(x: -8)
+                    .padding(.vertical, 2)
+                    .offset(x: -6)
             }
         }
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.primary.opacity(isHovering ? 0.04 : 0))
+        )
+        .animation(.easeInOut(duration: 0.15), value: isHovering)
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovering = hovering
@@ -80,6 +93,10 @@ struct StreamEntryRow: View {
                 } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+
+                // Bullet type submenu
+                Divider()
+                bulletTypeMenu
 
                 // Task state submenu
                 if entry.bulletType == .task {
@@ -104,6 +121,29 @@ struct StreamEntryRow: View {
                     Label("Delete", systemImage: "trash")
                 }
             }
+        }
+    }
+
+    // MARK: - Bullet type menu
+
+    @ViewBuilder
+    private var bulletTypeMenu: some View {
+        Menu {
+            ForEach([BulletType.note, .task, .event, .idea], id: \.self) { type in
+                Button {
+                    onBulletTypeChange?(entry, type)
+                } label: {
+                    HStack {
+                        Text("\(type.glyph) \(type.label)")
+                        if type == entry.bulletType {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(type == entry.bulletType)
+            }
+        } label: {
+            Label("Type: \(entry.bulletType.label)", systemImage: "arrow.triangle.swap")
         }
     }
 
@@ -208,12 +248,18 @@ struct StreamEntryRow: View {
                 Button {
                     let next: TaskState = (entry.taskState == .done) ? .pending : .done
                     onTaskStateChange?(entry, next)
+                    justToggled = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        justToggled = false
+                    }
                 } label: {
                     Text(entry.displayGlyph)
                         .font(Self.contentFont)
                         .tracking(-0.15)
                         .foregroundStyle(glyphColor)
                         .frame(width: 12, alignment: .leading)
+                        .scaleEffect(justToggled ? 1.2 : 1.0)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justToggled)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -242,27 +288,32 @@ struct StreamEntryRow: View {
         if isHovering && isRescuable {
             Text("↑ rescue")
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.blue.opacity(0.7))
+                .foregroundStyle(Theme.event.opacity(0.7))
                 .fixedSize()
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .opacity
+                ))
         } else if let time = timeLabel {
             Text(time)
                 .font(Self.timeFont)
                 .foregroundStyle(.tertiary)
                 .fixedSize()
+                .transition(.opacity)
         }
     }
 
     private var glyphColor: Color {
         switch entry.bulletType {
-        case .idea: return .yellow
+        case .idea: return Theme.idea
         case .task:
             switch entry.taskState {
-            case .done: return .green
+            case .done: return Theme.taskDone
             case .cancelled: return .secondary
-            case .migrated: return .blue
+            case .migrated: return Theme.event
             default: return .primary
             }
-        case .event: return .blue
+        case .event: return Theme.event
         case .note: return .primary
         case .unknown: return .secondary
         }

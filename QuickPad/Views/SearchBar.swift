@@ -8,6 +8,7 @@ struct SearchBar: View {
     @Binding var query: String
     var onDismiss: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isFocused: Bool
 
     private static let font = Font.system(size: 12, design: .monospaced)
@@ -48,10 +49,12 @@ struct SearchBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(alignment: .bottom) {
+        .background(Theme.surface(for: colorScheme))
+        .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color.secondary.opacity(0.15))
-                .frame(height: 1)
+                .fill(isFocused ? Theme.event.opacity(0.3) : Color.secondary.opacity(0.1))
+                .frame(height: isFocused ? 1.5 : 0.5)
+                .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
         .onAppear {
             // Delay matches InputBar's pattern — gives the popover a

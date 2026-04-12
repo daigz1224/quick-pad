@@ -16,20 +16,42 @@ struct DaySeparatorView: View {
     var body: some View {
         HStack(spacing: 6) {
             line
-            Text(label)
-                .font(.system(size: 9, design: .monospaced))
-                .tracking(0.5)
-                .foregroundStyle(.secondary)
-                .fixedSize()
+            labelView
             line
         }
         .opacity(separatorOpacity)
     }
 
+    @ViewBuilder
+    private var labelView: some View {
+        let text = Text(label)
+            .font(.system(size: 10, design: .monospaced))
+            .tracking(0.3)
+            .foregroundStyle(.secondary)
+            .fixedSize()
+
+        if isToday {
+            text
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Theme.event.opacity(0.10), in: Capsule())
+        } else {
+            text
+        }
+    }
+
+    private var isToday: Bool {
+        guard let date else { return false }
+        return Calendar.current.isDateInToday(date)
+    }
+
     private var line: some View {
         Rectangle()
-            .fill(Color.secondary.opacity(0.25))
-            .frame(height: 1)
+            .fill(LinearGradient(
+                colors: [.clear, Color.secondary.opacity(0.2), .clear],
+                startPoint: .leading, endPoint: .trailing
+            ))
+            .frame(height: 0.5)
     }
 
     /// Separator opacity follows the gravity curve but stays slightly

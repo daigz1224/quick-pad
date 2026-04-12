@@ -24,6 +24,12 @@ struct PopoverRootView: View {
     @State private var rescueToast: String? = nil
     @State private var rescueTimer: Timer? = nil
 
+    /// Keyboard shortcut hints overlay.
+    @State private var showShortcutHints: Bool = false
+
+    /// Palette refresh trigger — bumped when palette cycles.
+    @State private var paletteRefresh: Int = UserDefaults.standard.integer(forKey: "accentPalette")
+
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
     }
@@ -37,11 +43,7 @@ struct PopoverRootView: View {
     }
 
     private var backgroundColor: Color {
-        if isDark {
-            return Color(red: 0.09, green: 0.09, blue: 0.10)
-        } else {
-            return Color(red: 0.99, green: 0.99, blue: 1.00)
-        }
+        Theme.background(isDark: isDark)
     }
 
     var body: some View {
@@ -50,8 +52,7 @@ struct PopoverRootView: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 header
-                Divider()
-                    .opacity(0.5)
+                Theme.fadeDivider
                 if isSearching {
                     SearchBar(query: $searchQuery, onDismiss: dismissSearch)
                 } else {
@@ -81,6 +82,9 @@ struct PopoverRootView: View {
                     onTaskStateChange: { entry, newState in
                         viewModel.setTaskState(entry, newState: newState)
                     },
+                    onBulletTypeChange: { entry, newType in
+                        viewModel.changeBulletType(entry, newType: newType)
+                    },
                     typeFilter: typeFilter
                 )
             }
@@ -97,6 +101,15 @@ struct PopoverRootView: View {
                 rescueToastView(msg)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.bottom, 8)
+            }
+
+            // Shortcut hints overlay
+            if showShortcutHints {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture { showShortcutHints = false }
+
+                ShortcutHintsView { showShortcutHints = false }
             }
         }
         .frame(width: 420, height: 520)
@@ -132,6 +145,10 @@ struct PopoverRootView: View {
                 // ⌘D detach/reattach
                 Button("Detach") { popoverController.onDetachToggle?() }
                     .keyboardShortcut("d", modifiers: .command)
+
+                // ⌘/ shortcut hints
+                Button("Hints") { showShortcutHints.toggle() }
+                    .keyboardShortcut("/", modifiers: .command)
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -140,6 +157,8 @@ struct PopoverRootView: View {
         .onAppear { viewModel.load() }
         .animation(.easeInOut(duration: 0.2), value: viewModel.undoEntry != nil)
         .animation(.easeInOut(duration: 0.2), value: rescueToast != nil)
+        .animation(.easeInOut(duration: 0.15), value: typeFilter)
+        .animation(.easeInOut(duration: 0.2), value: showShortcutHints)
     }
 
     // MARK: - Type filter
@@ -154,6 +173,9 @@ struct PopoverRootView: View {
 
     private func filterBar(_ filter: BulletType) -> some View {
         HStack(spacing: 6) {
+            Text(filter.glyph)
+                .font(.system(size: 10))
+                .foregroundStyle(filterGlyphColor(filter))
             Text("Showing: \(filter.label)")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -163,13 +185,27 @@ struct PopoverRootView: View {
             } label: {
                 Text("⌘5 clear")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.blue.opacity(0.7))
+                    .foregroundStyle(Theme.event.opacity(0.7))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(Color.secondary.opacity(0.06))
+        .padding(.vertical, 5)
+        .background(Theme.surface(isDark: isDark).opacity(0.6))
+        .overlay(alignment: .bottom) {
+            Theme.fadeDivider
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func filterGlyphColor(_ type: BulletType) -> Color {
+        switch type {
+        case .idea: return Theme.idea
+        case .task: return .primary
+        case .event: return Theme.event
+        case .note: return .primary
+        case .unknown: return .secondary
+        }
     }
 
     // MARK: - Search helpers
@@ -207,57 +243,17 @@ struct PopoverRootView: View {
     }
 
     private var searchEmptyState: some View {
-        VStack(spacing: 6) {
-            Text("no matches")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-            Text("esc to exit search")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView(icon: "magnifyingglass", title: "no matches", hint: "esc to exit search")
     }
 
     private var filterEmptyState: some View {
-        VStack(spacing: 6) {
-            Text("no \(typeFilter?.label ?? "") entries")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-            Text("⌘5 to clear filter")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView(icon: "line.3.horizontal.decrease", title: "no \(typeFilter?.label ?? "") entries", hint: "⌘5 to clear filter")
     }
 
     // MARK: - Undo toast
 
     private var undoToast: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "trash")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-            Text("Deleted")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.primary)
-            Spacer()
-            Button {
-                performUndo()
-            } label: {
-                Text("Undo ⌘Z")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.blue)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-        }
-        .padding(.horizontal, 16)
+        toastPill(icon: "trash", iconColor: Theme.priority.opacity(0.8), message: "Deleted", onAction: performUndo)
     }
 
     private func performUndo() {
@@ -283,31 +279,37 @@ struct PopoverRootView: View {
     // MARK: - Rescue toast
 
     private func rescueToastView(_ message: String) -> some View {
+        toastPill(icon: "arrow.up.to.line", iconColor: Theme.event, message: message, onAction: performUndoRescue)
+    }
+
+    private func toastPill(icon: String, iconColor: Color, message: String, onAction: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "arrow.up.to.line")
+            Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundStyle(.blue)
+                .foregroundStyle(iconColor)
             Text(message)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.primary)
             Spacer()
-            Button {
-                performUndoRescue()
-            } label: {
+            Button(action: onAction) {
                 Text("Undo ⌘Z")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Theme.event)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(Theme.SubtleButton())
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background {
-            RoundedRectangle(cornerRadius: 8)
+            Capsule()
                 .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                )
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 24)
     }
 
     private func showRescueToast() {
@@ -350,6 +352,7 @@ struct PopoverRootView: View {
             Spacer()
 
             exportButton
+            paletteButton
             appearanceButton
             detachButton
             if !popoverController.isDetached {
@@ -357,7 +360,7 @@ struct PopoverRootView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
     }
 
     private var exportButton: some View {
@@ -370,8 +373,27 @@ struct PopoverRootView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Theme.SubtleButton())
         .help("Export visible entries (⌘E)")
+    }
+
+    private var paletteButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                Theme.cyclePalette()
+                paletteRefresh = UserDefaults.standard.integer(forKey: "accentPalette")
+            }
+        } label: {
+            // Show a small colored dot indicating the current palette's event color
+            Circle()
+                .fill(Theme.event)
+                .frame(width: 8, height: 8)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .id(paletteRefresh) // force re-render
+        }
+        .buttonStyle(Theme.SubtleButton())
+        .help("Accent palette: \(Theme.currentPalette.name) — click to cycle")
     }
 
     private var appearanceButton: some View {
@@ -384,7 +406,7 @@ struct PopoverRootView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Theme.SubtleButton())
         .help(appearance.tooltip)
     }
 
@@ -401,7 +423,7 @@ struct PopoverRootView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Theme.SubtleButton())
         .help(popoverController.isDetached
               ? "Reattach to menu bar"
               : "Detach to floating window")
@@ -421,7 +443,7 @@ struct PopoverRootView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Theme.SubtleButton())
         .help(popoverController.isPinned ? "Unpin (auto-close on click outside)" : "Pin (stay open)")
     }
 }

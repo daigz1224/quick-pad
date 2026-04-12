@@ -159,6 +159,42 @@ struct StreamMutator {
         try replaceLine(oldLine: rawLine, newLine: newLine, in: fileURL)
     }
 
+    // MARK: - Change bullet type
+
+    /// Change an entry's bullet type. `[note] foo` → `[task] foo`.
+    /// Task-state suffixes are dropped when converting away from task,
+    /// and added as `>pending` when converting to task.
+    func changeBulletType(
+        rawLine: String,
+        newType: BulletType,
+        fileURL: URL = MarkdownFileStore.streamFileURL
+    ) throws {
+        let newLine = Self.replaceBulletType(rawLine: rawLine, newType: newType)
+        guard newLine != rawLine else { return }
+        try replaceLine(oldLine: rawLine, newLine: newLine, in: fileURL)
+    }
+
+    /// Pure helper: replace the bracket token's bullet type.
+    /// `[task>done] foo` → `[note] foo`  (strips task state)
+    /// `[note] foo` → `[task] foo`       (no state suffix added for task)
+    static func replaceBulletType(rawLine: String, newType: BulletType) -> String {
+        guard let openBracket = rawLine.firstIndex(of: "["),
+              let closeBracket = rawLine.firstIndex(of: "]") else {
+            return rawLine
+        }
+        let token = String(rawLine[rawLine.index(after: openBracket)..<closeBracket])
+
+        // Preserve >deleted suffix if present.
+        let isDeleted = token.contains(">deleted")
+
+        var newToken = newType.rawValue
+        if isDeleted { newToken += ">deleted" }
+
+        let prefix = String(rawLine[rawLine.startIndex...openBracket])
+        let suffix = String(rawLine[closeBracket...])
+        return prefix + newToken + suffix
+    }
+
     // MARK: - Line manipulation (pure, testable)
 
     /// Rebuild an entry line with new content, preserving the prefix

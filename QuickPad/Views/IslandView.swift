@@ -15,6 +15,10 @@ struct IslandView: View {
     @State private var bulletType: BulletType = .note
     @FocusState private var isInputFocused: Bool
 
+    /// Toast message (delete / rescue feedback).
+    @State private var toastMessage: String? = nil
+    @State private var toastTimer: Timer? = nil
+
     /// Bounce animation: temporary width offset.
     @State private var bounceOffset: CGFloat = 0
 
@@ -40,9 +44,13 @@ struct IslandView: View {
 
     // MARK: - Data
 
+    /// Only today's entries — the Island is a "now" view.
     private var recentEntries: [StreamEntry] {
-        let all = viewModel.sections.flatMap { $0.entries }
-        return Array(all.filter { !$0.isDeleted }.prefix(5))
+        let todaySections = viewModel.sections.filter { section in
+            guard let date = section.date else { return false }
+            return Calendar.current.isDateInToday(date)
+        }
+        return todaySections.flatMap { $0.entries }.filter { !$0.isDeleted }
     }
 
     private var latestSummary: String {
@@ -52,7 +60,7 @@ struct IslandView: View {
     }
 
     private var totalEntryCount: Int {
-        viewModel.sections.flatMap { $0.entries }.filter { !$0.isDeleted }.count
+        recentEntries.count
     }
 
     // MARK: - Fonts
@@ -204,16 +212,30 @@ struct IslandView: View {
             }
 
             // Entries
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(recentEntries) { entry in
-                        entryRow(entry)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 2)
+            ZStack(alignment: .bottom) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(recentEntries) { entry in
+                            entryRow(entry)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 2)
+                        }
                     }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
+
+                if let msg = toastMessage {
+                    Text(msg)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.white.opacity(0.12)))
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, 4)
+                }
             }
+            .animation(.easeInOut(duration: 0.15), value: toastMessage != nil)
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -225,73 +247,47 @@ struct IslandView: View {
     // MARK: - Entry row
 
     private func entryRow(_ entry: StreamEntry) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(entry.displayGlyph)
-                .font(Self.contentFont).tracking(-0.15)
-                .foregroundStyle(entryGlyphColor(entry))
-                .frame(width: 12, alignment: .leading)
-            Text(entry.content)
-                .font(Self.contentFont).tracking(-0.15)
-                .foregroundStyle(.white.opacity(0.85))
-                .lineSpacing(1).lineLimit(2)
-                .strikethrough(entry.taskState == .cancelled)
-            Spacer(minLength: 6)
-            if let t = timeLabel(for: entry) {
-                Text(t).font(Self.timeFont)
-                    .foregroundStyle(.white.opacity(0.35)).fixedSize()
+        IslandEntryRow(
+            entry: entry,
+            onEdit: { entry, newContent in
+                viewModel.editEntry(entry, newContent: newContent)
+            },
+            onDelete: { entry in
+                viewModel.deleteEntry(entry)
+                showToast("deleted")
+            },
+            onRescue: { entry in
+                viewModel.rescueEntry(entry)
+                showToast("rescued ↑")
+            },
+            onTaskStateChange: { entry, newState in
+                viewModel.setTaskState(entry, newState: newState)
+            },
+            onBulletTypeChange: { entry, newType in
+                viewModel.changeBulletType(entry, newType: newType)
             }
-        }
+        )
         .opacity(entry.gravityOpacity)
     }
 
-    // MARK: - Colors
-
-    private func entryGlyphColor(_ entry: StreamEntry) -> Color {
-        switch entry.bulletType {
-        case .idea: return .yellow
-        case .task:
-            switch entry.taskState {
-            case .done: return .green
-            case .cancelled: return .white.opacity(0.3)
-            case .migrated: return .blue
-            default: return .white.opacity(0.7)
-            }
-        case .event: return .blue
-        case .note: return .white.opacity(0.7)
-        case .unknown: return .white.opacity(0.3)
+    private func showToast(_ message: String) {
+        toastTimer?.invalidate()
+        toastMessage = message
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+            DispatchQueue.main.async { toastMessage = nil }
         }
     }
+
+    // MARK: - Input bar colors
 
     private var glyphColor: Color {
         switch bulletType {
-        case .idea: return .yellow
+        case .idea: return Theme.idea
         case .task: return .white.opacity(0.7)
-        case .event: return .blue
+        case .event: return Theme.event
         case .note: return .white.opacity(0.7)
         case .unknown: return .white.opacity(0.3)
         }
-    }
-
-    // MARK: - Time labels
-
-    private static let shortTimeFmt: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "ha"; return f
-    }()
-
-    private func timeLabel(for entry: StreamEntry) -> String? {
-        guard let ts = entry.timestamp else { return nil }
-        let days = entry.ageInDays
-        if days == 0 {
-            let s = Int(Date().timeIntervalSince(ts))
-            if s < 60 { return "now" }
-            let m = s / 60; if m < 60 { return "\(m)m" }
-            return "\(m / 60)h"
-        } else if days <= 3 {
-            return Self.shortTimeFmt.string(from: ts).lowercased()
-        }
-        return nil
     }
 
     private var placeholder: String {
@@ -332,5 +328,273 @@ struct IslandView: View {
         viewModel.append(bulletType: bulletType, content: trimmed)
         draft = ""
         isInputFocused = true
+    }
+}
+
+// MARK: - Island entry row (dark theme, full interaction)
+
+/// Interactive entry row styled for the dark Island background.
+/// Supports task toggle, inline edit, context menu (edit/delete/rescue/task state).
+private struct IslandEntryRow: View {
+    let entry: StreamEntry
+    var onEdit: ((StreamEntry, String) -> Void)?
+    var onDelete: ((StreamEntry) -> Void)?
+    var onRescue: ((StreamEntry) -> Void)?
+    var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
+    var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
+
+    @State private var isHovering = false
+    @State private var isEditing = false
+    @State private var editDraft = ""
+    @State private var justToggled = false
+    @FocusState private var isEditFocused: Bool
+
+    private static let contentFont = Font.system(size: 11)
+    private static let timeFont = Font.system(size: 10, design: .monospaced)
+
+    private var isRescuable: Bool {
+        entry.ageInDays >= 1 && entry.bulletType != .unknown
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            glyphView
+
+            if isEditing {
+                editField
+            } else {
+                Text(entry.content)
+                    .font(Self.contentFont).tracking(-0.15)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineSpacing(1).lineLimit(2)
+                    .strikethrough(entry.taskState == .cancelled)
+            }
+
+            Spacer(minLength: 6)
+            trailingLabel
+                .frame(width: 30, alignment: .trailing)
+        }
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(.white.opacity(isHovering ? 0.06 : 0))
+        )
+        .animation(.easeInOut(duration: 0.12), value: isHovering)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .onTapGesture {
+            if isRescuable { onRescue?(entry) }
+        }
+        .contextMenu { contextMenuItems }
+    }
+
+    // MARK: - Glyph
+
+    private var glyphView: some View {
+        Group {
+            if entry.bulletType == .task {
+                Button {
+                    let next: TaskState = (entry.taskState == .done) ? .pending : .done
+                    onTaskStateChange?(entry, next)
+                    justToggled = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        justToggled = false
+                    }
+                } label: {
+                    Text(entry.displayGlyph)
+                        .font(Self.contentFont).tracking(-0.15)
+                        .foregroundStyle(glyphColor)
+                        .frame(width: 12, alignment: .leading)
+                        .scaleEffect(justToggled ? 1.2 : 1.0)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justToggled)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(entry.displayGlyph)
+                    .font(Self.contentFont).tracking(-0.15)
+                    .foregroundStyle(glyphColor)
+                    .frame(width: 12, alignment: .leading)
+            }
+        }
+    }
+
+    // MARK: - Inline edit
+
+    private var editField: some View {
+        HStack(spacing: 4) {
+            TextField("content", text: $editDraft)
+                .textFieldStyle(.plain)
+                .font(Self.contentFont).tracking(-0.15)
+                .foregroundStyle(.white)
+                .focused($isEditFocused)
+                .onSubmit(commitEdit)
+                .onExitCommand(perform: cancelEdit)
+            Button { commitEdit() } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.taskDone)
+            }
+            .buttonStyle(.plain)
+            Button { cancelEdit() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 1)
+        .padding(.horizontal, 4)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func beginEditing() {
+        editDraft = entry.content
+        isEditing = true
+        DispatchQueue.main.async { isEditFocused = true }
+    }
+
+    private func commitEdit() {
+        let trimmed = editDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != entry.content else {
+            cancelEdit(); return
+        }
+        onEdit?(entry, trimmed)
+        isEditing = false
+    }
+
+    private func cancelEdit() {
+        isEditing = false
+        editDraft = ""
+    }
+
+    // MARK: - Trailing label
+
+    @ViewBuilder
+    private var trailingLabel: some View {
+        if isHovering && isRescuable {
+            Text("↑")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(Theme.event.opacity(0.7))
+                .fixedSize()
+        } else if let t = timeLabel {
+            Text(t).font(Self.timeFont)
+                .foregroundStyle(.white.opacity(0.35)).fixedSize()
+        }
+    }
+
+    // MARK: - Context menu
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if entry.bulletType != .unknown {
+            Button { beginEditing() } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            Divider()
+            bulletTypeMenu
+
+            if entry.bulletType == .task {
+                Divider()
+                taskStateMenu
+            }
+
+            if isRescuable {
+                Divider()
+                Button { onRescue?(entry) } label: {
+                    Label("Rescue to Today", systemImage: "arrow.up.to.line")
+                }
+            }
+
+            Divider()
+            Button(role: .destructive) { onDelete?(entry) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bulletTypeMenu: some View {
+        Menu {
+            ForEach([BulletType.note, .task, .event, .idea], id: \.self) { type in
+                Button {
+                    onBulletTypeChange?(entry, type)
+                } label: {
+                    HStack {
+                        Text("\(type.glyph) \(type.label)")
+                        if type == entry.bulletType {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(type == entry.bulletType)
+            }
+        } label: {
+            Label("Type: \(entry.bulletType.label)", systemImage: "arrow.triangle.swap")
+        }
+    }
+
+    @ViewBuilder
+    private var taskStateMenu: some View {
+        let current = entry.taskState ?? .pending
+        if current != .done {
+            Button { onTaskStateChange?(entry, .done) } label: {
+                Label("Mark Done", systemImage: "checkmark")
+            }
+        }
+        if current != .pending {
+            Button { onTaskStateChange?(entry, .pending) } label: {
+                Label("Mark Pending", systemImage: "circle")
+            }
+        }
+        if current != .migrated {
+            Button { onTaskStateChange?(entry, .migrated) } label: {
+                Label("Mark Migrated", systemImage: "arrow.right")
+            }
+        }
+        if current != .cancelled {
+            Button { onTaskStateChange?(entry, .cancelled) } label: {
+                Label("Mark Cancelled", systemImage: "xmark")
+            }
+        }
+    }
+
+    // MARK: - Colors & time
+
+    private var glyphColor: Color {
+        switch entry.bulletType {
+        case .idea: return Theme.idea
+        case .task:
+            switch entry.taskState {
+            case .done: return Theme.taskDone
+            case .cancelled: return .white.opacity(0.3)
+            case .migrated: return Theme.event
+            default: return .white.opacity(0.7)
+            }
+        case .event: return Theme.event
+        case .note: return .white.opacity(0.7)
+        case .unknown: return .white.opacity(0.3)
+        }
+    }
+
+    private static let shortTimeFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "ha"; return f
+    }()
+
+    private var timeLabel: String? {
+        guard let ts = entry.timestamp else { return nil }
+        let days = entry.ageInDays
+        if days == 0 {
+            let s = Int(Date().timeIntervalSince(ts))
+            if s < 60 { return "now" }
+            let m = s / 60; if m < 60 { return "\(m)m" }
+            return "\(m / 60)h"
+        } else if days <= 3 {
+            return Self.shortTimeFmt.string(from: ts).lowercased()
+        }
+        return nil
     }
 }

@@ -23,6 +23,7 @@ struct StreamListView: View {
     var onDelete: ((StreamEntry) -> Void)?
     var onRescue: ((StreamEntry) -> Void)?
     var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
+    var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
 
     /// Active type filter. Nil = show all.
     var typeFilter: BulletType? = nil
@@ -69,28 +70,33 @@ struct StreamListView: View {
                                 onEdit: onEdit,
                                 onDelete: onDelete,
                                 onRescue: onRescue,
-                                onTaskStateChange: onTaskStateChange
+                                onTaskStateChange: onTaskStateChange,
+                                onBulletTypeChange: onBulletTypeChange
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, 16)
             }
             .scrollContentBackground(.hidden)
+            .mask(
+                VStack(spacing: 0) {
+                    Color.black
+                    // Bottom fade hint — indicates scrollable content below
+                    LinearGradient(
+                        colors: [.black, .clear],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 12)
+                }
+            )
         }
     }
 
     private var defaultEmptyState: some View {
-        VStack(spacing: 6) {
-            Text("stream.md is empty")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-            Text("write to ~/.quickpad/stream.md and relaunch")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView(icon: "text.justify.leading", title: "your stream is empty", hint: "type above to start capturing")
     }
 }

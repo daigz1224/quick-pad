@@ -8,9 +8,11 @@ import SwiftUI
 /// bullet selection. All disk writes go through `StreamViewModel.append`.
 struct InputBar: View {
     @Environment(StreamViewModel.self) private var viewModel
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var draft: String = ""
     @State private var bulletType: BulletType = .note
+    @State private var bulletBounce: Bool = false
     @FocusState private var isFocused: Bool
 
     private static let font = Font.system(size: 12, design: .monospaced)
@@ -29,12 +31,13 @@ struct InputBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(alignment: .bottom) {
-            // Hairline under the input to mirror the divider above the
-            // stream body, so the input feels like its own band.
+        .background(Theme.surface(for: colorScheme))
+        .overlay(alignment: .bottom) {
+            // Focus accent line — visible when typing.
             Rectangle()
-                .fill(Color.secondary.opacity(0.15))
-                .frame(height: 1)
+                .fill(isFocused ? Theme.event.opacity(0.3) : Color.secondary.opacity(0.1))
+                .frame(height: isFocused ? 1.5 : 0.5)
+                .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
         .onAppear {
             // Slight delay so the popover finishes becoming key before
@@ -48,13 +51,22 @@ struct InputBar: View {
 
     private var bulletButton: some View {
         Button {
-            bulletType = bulletType.next
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                bulletType = bulletType.next
+                bulletBounce = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                bulletBounce = false
+            }
         } label: {
             Text(bulletType.glyph)
                 .font(Self.font)
                 .tracking(-0.3)
                 .foregroundStyle(glyphColor)
                 .frame(width: 18, height: 18)
+                .scaleEffect(bulletBounce ? 1.25 : 1.0)
+                .rotationEffect(.degrees(bulletBounce ? -15 : 0))
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: bulletBounce)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -63,9 +75,9 @@ struct InputBar: View {
 
     private var glyphColor: Color {
         switch bulletType {
-        case .idea: return .yellow
+        case .idea: return Theme.idea
         case .task: return .primary
-        case .event: return .blue
+        case .event: return Theme.event
         case .note: return .primary
         case .unknown: return .secondary
         }

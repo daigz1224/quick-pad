@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// Holds the parsed stream and exposes a `load()` entry point. Uses the
 /// macOS 14 Observation framework so SwiftUI views update automatically
@@ -35,6 +36,15 @@ final class StreamViewModel {
         isShowingSample = result.usedFallback
     }
 
+    /// Reload with animation so entry additions/removals transition smoothly.
+    private func animatedLoad() {
+        let result = store.load()
+        withAnimation(.easeOut(duration: 0.2)) {
+            sections = result.sections
+            isShowingSample = result.usedFallback
+        }
+    }
+
     /// Append a new entry to stream.md and reload so the UI reflects
     /// the change. Empty/whitespace content is a no-op — the input bar
     /// should also guard against this so this is just belt-and-suspenders.
@@ -46,7 +56,7 @@ final class StreamViewModel {
             fileWatcher?.suppressNextChange()
             try writer.append(bulletType: bulletType, content: trimmed)
             lastWriteError = nil
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "failed to write stream.md: \(error)"
         }
@@ -67,7 +77,7 @@ final class StreamViewModel {
             fileWatcher?.suppressNextChange()
             try mutator.editEntry(oldRawLine: entry.rawLine, newContent: trimmed)
             lastWriteError = nil
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "edit failed: \(error.localizedDescription)"
         }
@@ -86,7 +96,7 @@ final class StreamViewModel {
             deletedEntry.rawLine = StreamMutator.insertDeletedSuffix(entry.rawLine)
             deletedEntry.isDeleted = true
             undoEntry = deletedEntry
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "delete failed: \(error.localizedDescription)"
         }
@@ -106,7 +116,7 @@ final class StreamViewModel {
             fileWatcher?.suppressNextChange()
             try mutator.rescue(rawLine: entry.rawLine)
             lastWriteError = nil
-            load()
+            animatedLoad()
         } catch {
             undoRescueSnapshot = nil
             lastWriteError = "rescue failed: \(error.localizedDescription)"
@@ -122,9 +132,22 @@ final class StreamViewModel {
             try snapshot.write(to: fileURL, atomically: true, encoding: .utf8)
             undoRescueSnapshot = nil
             lastWriteError = nil
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "undo rescue failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Change an entry's bullet type (note/task/event/idea).
+    func changeBulletType(_ entry: StreamEntry, newType: BulletType) {
+        guard newType != entry.bulletType else { return }
+        do {
+            fileWatcher?.suppressNextChange()
+            try mutator.changeBulletType(rawLine: entry.rawLine, newType: newType)
+            lastWriteError = nil
+            animatedLoad()
+        } catch {
+            lastWriteError = "type change failed: \(error.localizedDescription)"
         }
     }
 
@@ -134,7 +157,7 @@ final class StreamViewModel {
             fileWatcher?.suppressNextChange()
             try mutator.setTaskState(rawLine: entry.rawLine, newState: newState)
             lastWriteError = nil
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "task state change failed: \(error.localizedDescription)"
         }
@@ -148,7 +171,7 @@ final class StreamViewModel {
             try mutator.undelete(rawLine: entry.rawLine)
             lastWriteError = nil
             undoEntry = nil
-            load()
+            animatedLoad()
         } catch {
             lastWriteError = "undo failed: \(error.localizedDescription)"
         }

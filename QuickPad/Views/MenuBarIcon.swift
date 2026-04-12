@@ -28,7 +28,7 @@ enum MenuBarIcon {
             for row in rows {
                 // Bullet dot on the left.
                 let dot = NSBezierPath(
-                    ovalIn: NSRect(x: 1, y: row.y - 1, width: 2.2, height: 2.2)
+                    ovalIn: NSRect(x: 1, y: row.y - 1.1, width: 2.5, height: 2.5)
                 )
                 dot.fill()
 
