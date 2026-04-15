@@ -613,7 +613,6 @@ func rescueEntry(_ entry: StreamEntry) {
 - [x] ⌘D 拆出为浮动窗口 / 合回 popover
 - [x] 浮动窗口置顶（NSPanel.level = .floating）
 - [x] 多显示器感知（跟随 status item 所在屏幕）
-- [ ] ~~Pinned Notes + 毕业 ⌘⇧G~~ — 跳过，保持 KISS
 - [ ] ~~条目合并 ⌘M~~ — 跳过
 - [ ] ~~config.toml~~ — 跳过
 
@@ -638,6 +637,28 @@ func rescueEntry(_ entry: StreamEntry) {
 - [x] Hover 驱动的 spring 动画（response 0.42, damping 0.8）
 - [x] 点击穿透修复（只在交互区截获事件，其余区域透明）
 - [x] 菜单栏右键 Show/Hide Island 切换
+
+### Phase 6 — 闭环补全（Loop closure）
+
+补回设计书里跳过但属于核心循环的部分：
+
+- [x] **Graduate to Pinned Note**（右键 → Graduate）
+  - `Store/PinnedNoteStore.swift`：slug 生成、唯一文件名、Markdown 渲染（含原始时间戳/类型 frontmatter）
+  - `StreamMutator.removeLine`：从 stream.md 抽出原行
+  - `StreamViewModel.graduateEntry`：先写 pinned 文件，再删原行；任一步失败回滚
+  - 菜单栏右键 → **Pinned Notes** 子菜单列出 `~/.quickpad/pinned/*.md`，按 mtime 倒序，回车在系统默认 Markdown 编辑器里打开
+- [x] **Quick Capture 迷你面板**（⌥⇧N）
+  - `QuickCapturePanel: NSPanel`：`.nonactivatingPanel + .borderless`，不抢焦点
+  - 居中屏幕上方 70% 高度，宽 480pt
+  - SwiftUI `QuickCaptureView`：bullet 切换 + TextField，Enter 提交并关闭，Esc 取消
+- [x] **Hint bar**（输入框下方可点击 chip 行）
+  - 4 个 bullet 切换 chip + 4 个 prefix 注入 chip（`read:` / `watch:` / `listen:` / `*`）
+  - `ViewModel/InputBarModel.swift`：把 `bulletType` + `draft` 提到共享 `@Observable`，InputBar 与 HintBar 共用
+  - 头部按钮 + `@AppStorage("showHintBar")` 持久化显隐
+- [x] **Archive search**
+  - `MarkdownFileStore.loadArchives()`：读取 `~/.quickpad/archive/*.md`，扁平为 sections
+  - `⌘F` 搜索时把命中行集中放进只读的 `── FROM ARCHIVE ──` section 追加到结果尾
+  - `StreamSection.isReadOnly` 标记，UI 层在 archive section 上抑制 context menu / rescue 点击
 
 > **归档阈值说明**：早期 `config.toml` 草案中的 `todo_archive_after_hours = 24`
 > 仅为设计示意。当前实现在 `Store/StreamArchiver.swift` 中硬编码为

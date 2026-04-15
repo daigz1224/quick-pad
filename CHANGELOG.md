@@ -6,6 +6,36 @@ dates; the app isn't versioned yet, so entries are grouped by ship date.
 
 ## [Unreleased]
 
+### Added
+- **Graduate to Pinned Note** (right-click entry → Graduate). Promotes
+  a stream entry into its own `~/.quickpad/pinned/<slug>.md` file with
+  a small frontmatter recording the original timestamp and bullet type,
+  then removes the line from `stream.md`. Closes the
+  `capture → review → rescue → graduate` loop that was missing — repeatedly
+  rescued entries can now leave the stream when they've matured.
+- **Pinned Notes submenu** under the menu bar's right-click menu —
+  lists `~/.quickpad/pinned/*.md` (newest-modified first), opens with
+  the system's default Markdown app. Includes a **Reveal Folder in
+  Finder** entry.
+- **Quick Capture mini panel** (⌥⇧N). Borderless `.nonactivatingPanel`
+  centered at the top quarter of the active screen. Type, hit Enter,
+  the panel dismisses and you stay in the app you came from. Replaces
+  the previous behaviour where ⌥⇧N opened the full popover.
+- **Hint bar** under the input row — clickable bullet chips
+  (`[— note] [☐ task] [? question] [! idea]`) and prefix chips
+  (`[r:] [w:] [l:] [*]`) that prepend the matching token into the draft.
+  Toggle visibility from the header.
+- **Archive search** — ⌘F now also searches every
+  `~/.quickpad/archive/*.md` file. Hits appear in a read-only
+  `── FROM ARCHIVE ──` section at the bottom of the result list.
+
+### Changed
+- Entries surfaced from the archive are read-only in the list — the
+  context menu and click-to-rescue affordance are suppressed so a
+  mutation can never target a file the row's section doesn't own.
+
+## 2026-04-15 — Single theme, Auto appearance, chrome polish
+
 ### Changed
 - Replaced the `event` bullet type with `question` (glyph: `?`). Questions
   fit a stream/append-and-review workflow better than events — for events
@@ -15,17 +45,32 @@ dates; the app isn't versioned yet, so entries are grouped by ship date.
   no migration is required.
 - Moved the unknown-bullet fallback glyph from `?` to `⋯` so it no longer
   collides with the new question glyph.
+- Swept hardcoded `.white.opacity()` / `.secondary` / `.yellow` from the
+  Island, edit field, and search highlight — everything now routes through
+  theme tokens. InlineMarkdown code spans, links, and the search highlight
+  pick up the theme accent.
+- Unified trailing time labels to 24-hour `HH:mm` across the popover and
+  Island (previously a mix of relative `2m`/`3h` and absolute `3pm`).
+- Cached `Palette` in `ThemeManager` so SwiftUI body re-entry stops
+  re-allocating `Color(red:)` tables per row.
 
 ### Added
 - Option + left-click on the menu bar icon now opens the same context
   menu as right-click.
-- Font Size submenu (Small / Medium / Large / Extra Large). Choice
-  persists across launches and scales every themed text surface.
-- Six more built-in themes popular in the VSCode and Obsidian communities:
-  **Dracula**, **Monokai**, **One Dark**, **Tokyo Night**, **Catppuccin**,
-  and **Gruvbox** — bringing the total to 10. Each theme now drives
-  typography too (font family, weight, italic, tracking), not just color.
-  Access via menu bar right-click → Theme.
+
+### Removed
+- Multi-theme system. Shipped 10 presets (Dracula, Monokai, One Dark,
+  Tokyo Night, Catppuccin, Gruvbox, etc.) and a Font Size submenu earlier
+  the same day, then deleted both: without bundled fonts or syntax
+  highlighting the non-default variants read worse than Default, and
+  "which theme am I on" added cognitive load without delivering taste.
+  `Palette` / `ThemeManager` are preserved as the home for any future
+  single-axis adjustment. See `ROADMAP.md` → Not pursuing.
+
+### Fixed
+- Auto appearance was silently locked to Dark. `ThemeManager` now
+  observes `NSApp.effectiveAppearance` via KVO and never passes `nil`
+  to `preferredColorScheme`.
 
 ## 2026-04-13 — Island interaction & visual polish
 

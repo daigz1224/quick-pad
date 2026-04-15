@@ -14,6 +14,37 @@ struct MarkdownFileStore {
             .appendingPathComponent("stream.md", isDirectory: false)
     }
 
+    /// `~/.quickpad/archive/` — monthly archive files written by
+    /// `StreamArchiver` for done/cancelled tasks older than 30 days.
+    static var archiveDirectoryURL: URL {
+        FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".quickpad", isDirectory: true)
+            .appendingPathComponent("archive", isDirectory: true)
+    }
+
+    /// Load every `archive/*.md` file and return the parsed entries
+    /// flattened into a single section list. Used by ⌘F to extend
+    /// search beyond the current stream so a "lost last year" idea
+    /// remains findable.
+    func loadArchives(directoryURL: URL = MarkdownFileStore.archiveDirectoryURL) -> [StreamSection] {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: directoryURL.path),
+              let urls = try? fm.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+              ) else {
+            return []
+        }
+        var sections: [StreamSection] = []
+        for url in urls.filter({ $0.pathExtension.lowercased() == "md" }) {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            sections.append(contentsOf: StreamParser.parse(text))
+        }
+        return sections
+    }
+
     /// Loads the stream. Returns the parsed sections plus a flag
     /// indicating whether the data came from disk or the bundled sample.
     func load() -> (sections: [StreamSection], usedFallback: Bool) {

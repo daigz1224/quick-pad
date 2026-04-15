@@ -19,14 +19,18 @@ scope. See `docs/ARCHITECTURE.md` for the design philosophy and
   CJK/Latin tuning.
 - **Phase 5 — Dynamic Island** · always-visible pill, compact/expanded
   states, click-through.
+- **Phase 6 — Loop closure** · Graduate to Pinned Notes (right-click →
+  Graduate, surfaced in the menu bar's Pinned Notes submenu), Quick
+  Capture mini panel (⌥⇧N), hint bar with bullet/prefix chips, archive
+  search.
 
 ## Considering
 
 Ideas that were initially scoped out but may resurface if demand or
 personal pain warrants them:
 
-- **Pinned Notes + graduate (⌘⇧G)** — promote a frequently-rescued entry
-  into a standalone note. Originally skipped for KISS.
+- **`⌘⇧G` keyboard shortcut for Graduate** — currently right-click only
+  because there's no row-selection focus model in the popover yet.
 - **Merge entries (⌘M)** — combine selected entries during review.
 - **`~/.quickpad/config.toml`** — user-configurable hotkeys, gravity
   curve, archive threshold, font. Currently all values are hardcoded.
@@ -34,6 +38,9 @@ personal pain warrants them:
   active screen changes mid-session.
 - **Per-entry customisable archive threshold** — today it's a single
   30-day rule across all done/cancelled tasks.
+- **Rescue counter / auto-graduate suggestion** — track how often an
+  entry gets rescued; when it crosses a threshold, surface a "you keep
+  coming back to this — graduate it?" hint. Needs a schema addition.
 
 ## Not pursuing
 

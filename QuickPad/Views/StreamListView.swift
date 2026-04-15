@@ -24,6 +24,7 @@ struct StreamListView: View {
     var onRescue: ((StreamEntry) -> Void)?
     var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
+    var onGraduate: ((StreamEntry) -> Void)?
 
     /// Active type filter. Nil = show all.
     var typeFilter: BulletType? = nil
@@ -67,11 +68,12 @@ struct StreamListView: View {
                             StreamEntryRow(
                                 entry: entry,
                                 highlightQuery: highlightQuery,
-                                onEdit: onEdit,
-                                onDelete: onDelete,
-                                onRescue: onRescue,
-                                onTaskStateChange: onTaskStateChange,
-                                onBulletTypeChange: onBulletTypeChange
+                                onEdit: section.isReadOnly ? nil : onEdit,
+                                onDelete: section.isReadOnly ? nil : onDelete,
+                                onRescue: section.isReadOnly ? nil : onRescue,
+                                onTaskStateChange: section.isReadOnly ? nil : onTaskStateChange,
+                                onBulletTypeChange: section.isReadOnly ? nil : onBulletTypeChange,
+                                onGraduate: section.isReadOnly ? nil : onGraduate
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)

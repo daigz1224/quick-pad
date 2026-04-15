@@ -145,6 +145,40 @@ struct StreamMutator {
         try Self.atomicWrite(result, to: fileURL)
     }
 
+    // MARK: - Remove line (used by graduate)
+
+    /// Delete a single line from `stream.md` outright (no soft-delete
+    /// suffix, no history preserved). The caller is responsible for
+    /// persisting the content elsewhere first — currently only
+    /// `PinnedNoteStore.graduate` uses this, after having written the
+    /// entry to `~/.quickpad/pinned/<slug>.md`.
+    func removeLine(
+        rawLine: String,
+        fileURL: URL = MarkdownFileStore.streamFileURL
+    ) throws {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let text = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            throw MutationError.fileNotReadable
+        }
+
+        var lines = text.components(separatedBy: "\n")
+        let idx: Int
+        if let i = lines.firstIndex(of: rawLine) {
+            idx = i
+        } else {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            guard let i = lines.firstIndex(where: {
+                $0.trimmingCharacters(in: .whitespaces) == trimmed
+            }) else {
+                throw MutationError.lineNotFound
+            }
+            idx = i
+        }
+        lines.remove(at: idx)
+        let result = lines.joined(separator: "\n")
+        try Self.atomicWrite(result, to: fileURL)
+    }
+
     // MARK: - Task state toggle
 
     /// Change a task entry's state. `[task] foo` → `[task>done] foo`.

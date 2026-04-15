@@ -17,6 +17,8 @@ struct StreamEntryRow: View {
     var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
     /// Called when the user changes the bullet type via context menu.
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
+    /// Called when the user graduates an entry to a pinned note.
+    var onGraduate: ((StreamEntry) -> Void)?
 
     @Environment(ThemeManager.self) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -37,8 +39,11 @@ struct StreamEntryRow: View {
     private var contentTracking: CGFloat { theme.contentTracking }
 
     /// Whether this entry is old enough to show the "click to rescue" hint.
+    /// Read-only sources (e.g. archive search results) have `onRescue == nil`
+    /// and never show the hint, since rescuing them would try to mutate
+    /// a file the row's source section doesn't own.
     private var isRescuable: Bool {
-        entry.ageInDays >= 1 && entry.bulletType != .unknown
+        onRescue != nil && entry.ageInDays >= 1 && entry.bulletType != .unknown
     }
 
     var body: some View {
@@ -93,7 +98,9 @@ struct StreamEntryRow: View {
         }
         .opacity(entry.gravityOpacity)
         .contextMenu {
-            if entry.bulletType != .unknown {
+            // No mutation menu for archive results (all callbacks nil)
+            // or for unparseable lines.
+            if entry.bulletType != .unknown && onEdit != nil {
                 Button {
                     beginEditing()
                 } label: {
@@ -118,6 +125,13 @@ struct StreamEntryRow: View {
                     } label: {
                         Label("Rescue to Today", systemImage: "arrow.up.to.line")
                     }
+                }
+
+                Divider()
+                Button {
+                    onGraduate?(entry)
+                } label: {
+                    Label("Graduate to Pinned Note", systemImage: "graduationcap")
                 }
 
                 Divider()

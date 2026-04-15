@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isIslandExpanded = false
     private let archiver = StreamArchiver()
     private var archiveTimer: Timer?
+    private let pinnedStore = PinnedNoteStore()
+    private var quickCapturePanel: QuickCapturePanel?
     /// Guards against `windowWillClose` firing during a programmatic
     /// `reattachToPopover` call — we don't want the delegate to
     /// double-clear state when we're already handling it.
@@ -46,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         floatingPanel = nil
         islandPanel?.close()
         islandPanel = nil
+        quickCapturePanel?.close()
+        quickCapturePanel = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -96,6 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(islandItem)
 
         menu.addItem(.separator())
+        menu.addItem(buildPinnedNotesItem())
+
+        menu.addItem(.separator())
 
         menu.addItem(
             NSMenuItem(
@@ -107,6 +114,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         button.performClick(nil)
         statusItem.menu = nil
+    }
+
+    // MARK: - Pinned notes submenu
+
+    private func buildPinnedNotesItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Pinned Notes", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        let urls = pinnedStore.list()
+
+        if urls.isEmpty {
+            let placeholder = NSMenuItem(
+                title: "No pinned notes — graduate one from a stream entry",
+                action: nil,
+                keyEquivalent: ""
+            )
+            placeholder.isEnabled = false
+            submenu.addItem(placeholder)
+        } else {
+            for url in urls {
+                let item = NSMenuItem(
+                    title: url.deletingPathExtension().lastPathComponent,
+                    action: #selector(openPinnedNote(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = url
+                submenu.addItem(item)
+            }
+            submenu.addItem(.separator())
+            let revealAll = NSMenuItem(
+                title: "Reveal Folder in Finder",
+                action: #selector(revealPinnedFolder),
+                keyEquivalent: ""
+            )
+            revealAll.target = self
+            submenu.addItem(revealAll)
+        }
+        parent.submenu = submenu
+        return parent
+    }
+
+    @objc private func openPinnedNote(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func revealPinnedFolder() {
+        let dir = PinnedNoteStore.pinnedDirectoryURL
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([dir])
     }
 
     // MARK: - Popover
@@ -268,6 +325,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         islandPanel?.orderOut(nil)
     }
 
+    // MARK: - Quick Capture (mini panel)
+
+    private func showQuickCapture() {
+        // If popover or floating window is already up, route the
+        // hotkey to that surface instead — no point stacking inputs.
+        if popover.isShown {
+            popover.contentViewController?.view.window?.makeKey()
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        if let panel = floatingPanel, panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        // Re-use any panel we built earlier — keeps NSPanel state
+        // (size, frame) stable across captures and avoids a brief
+        // flicker on rapid ⌥⇧N presses.
+        if let existing = quickCapturePanel {
+            existing.positionAtTopCenter()
+            existing.makeKeyAndOrderFront(nil)
+            existing.installEscMonitor()
+            return
+        }
+
+        let panel = QuickCapturePanel()
+        let host = NSHostingController(
+            rootView: QuickCaptureView(
+                onSubmit: { [weak self] type, text in
+                    self?.viewModel.append(bulletType: type, content: text)
+                    self?.quickCapturePanel?.dismiss()
+                },
+                onCancel: { [weak self] in
+                    self?.quickCapturePanel?.dismiss()
+                }
+            )
+            .environment(viewModel)
+            .environment(themeManager)
+        )
+        host.view.frame = NSRect(x: 0, y: 0, width: 480, height: 56)
+        // Make the hosting view transparent so the panel's blur shows.
+        host.view.wantsLayer = true
+        host.view.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentViewController = host
+        panel.onClose = { [weak self] in
+            // Drop the reference so the next ⌥⇧N gets a fresh, freshly
+            // focused panel rather than a re-shown one whose TextField
+            // may have lost focus state.
+            self?.quickCapturePanel = nil
+        }
+        panel.positionAtTopCenter()
+        panel.makeKeyAndOrderFront(nil)
+        panel.installEscMonitor()
+        quickCapturePanel = panel
+    }
+
     // MARK: - Auto-archive
 
     private func runArchiveAndSchedule() {
@@ -318,12 +432,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.togglePopover(nil)
                 }
             case .quickCapture:
-                if let panel = self.floatingPanel, panel.isVisible {
-                    panel.makeKeyAndOrderFront(nil)
-                    NSApp.activate(ignoringOtherApps: true)
-                } else {
-                    self.showPopover()
-                }
+                self.showQuickCapture()
             }
         }
         hotkeyManager.register()

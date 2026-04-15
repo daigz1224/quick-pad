@@ -19,9 +19,10 @@ struct ShortcutHintsView: View {
             ("Esc", "Cancel / dismiss"),
         ]),
         ("Actions", [
-            ("⌘F", "Search stream"),
+            ("⌘F", "Search stream + archive"),
             ("⌘Z", "Undo delete / rescue"),
             ("⌘E", "Export visible entries"),
+            ("RC", "Right-click row → Graduate"),
         ]),
         ("Filters", [
             ("⌘1", "Notes only"),

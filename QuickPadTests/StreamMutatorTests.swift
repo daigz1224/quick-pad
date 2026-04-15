@@ -239,6 +239,39 @@ final class StreamMutatorTests: XCTestCase {
         XCTAssertEqual(entry.content, "old task")
     }
 
+    // MARK: - removeLine (graduate)
+
+    func testRemoveLineDeletesExactMatch() throws {
+        let content = """
+        --- 2026-04-09 Thursday ---
+
+        - 2026-04-09T10:00:00+08:00 [note] keep this
+        - 2026-04-09T11:00:00+08:00 [idea] graduate me
+        - 2026-04-09T12:00:00+08:00 [task] keep this too
+        """
+        try content.write(to: tempFile, atomically: true, encoding: .utf8)
+
+        try mutator.removeLine(
+            rawLine: "- 2026-04-09T11:00:00+08:00 [idea] graduate me",
+            fileURL: tempFile
+        )
+
+        let result = try String(contentsOf: tempFile, encoding: .utf8)
+        XCTAssertFalse(result.contains("graduate me"))
+        XCTAssertTrue(result.contains("keep this"))
+        XCTAssertTrue(result.contains("keep this too"))
+    }
+
+    func testRemoveLineThrowsWhenNotFound() throws {
+        let content = "- 2026-04-09T10:00:00+08:00 [note] only line"
+        try content.write(to: tempFile, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try mutator.removeLine(
+            rawLine: "- 2026-04-09T10:00:00+08:00 [note] missing",
+            fileURL: tempFile
+        ))
+    }
+
     // MARK: - Edge cases
 
     func testEditFirstOccurrenceWhenDuplicateLines() throws {

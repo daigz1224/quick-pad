@@ -10,17 +10,20 @@ recent changes, and `ROADMAP.md` for plans.
 ## Features
 
 - **Menu bar popover** — click the icon or press **⌥N** anywhere to toggle
+- **Quick Capture panel** — press **⌥⇧N** anywhere to summon a borderless mini input at the top of the active screen; type, hit Enter, the panel closes and you're back in your original app
 - **Dynamic Island widget** — right-click the menu bar icon → **Show Island** for an always-visible pill that shows the latest entry; hover to expand, click to dismiss
 - **Floating window** — detach with **⌘D** for always-on-top note taking
 - **Rapid input** — Enter to append, Tab to cycle bullet type (note → task → question → idea)
+- **Hint bar** — clickable bullet/prefix chips below the input row for one-click type switching and `read:` / `watch:` / `listen:` / `*priority` insertion; toggle on/off from the header
 - **Gravity decay** — older entries fade in opacity; day separators decay from "TODAY" → "YESTERDAY" → "APR 6 · SUN" → "MAR 20"
 - **Rescue** — hover old entries and click to float them back to today; undo with **⌘Z**
 - **Task state** — click task glyph to toggle done/pending; right-click for migrated/cancelled
 - **Change bullet type** — right-click → Bullet Type to re-classify an existing entry
 - **In-place edit** — right-click → Edit to fix typos without breaking timestamp
 - **Soft delete + undo** — right-click → Delete with 5-second undo window
+- **Graduate to pinned note** — right-click → Graduate writes the entry to `~/.quickpad/pinned/<slug>.md` and pulls it out of the stream; pinned notes appear under the menu bar's right-click → **Pinned Notes** submenu
 - **Inline Markdown** — `` `code` ``, **bold**, `[links](url)` render natively
-- **Search** — **⌘F** full-text search with match highlighting
+- **Search** — **⌘F** full-text search across the live stream *and* every `~/.quickpad/archive/*.md` file; archive hits appear under a `── FROM ARCHIVE ──` divider
 - **Type filter** — **⌘1-4** to filter by note/task/question/idea, **⌘5** to clear
 - **Export** — **⌘E** exports visible entries as Markdown via save dialog
 - **Shortcut hints** — **⌘/** toggles an overlay listing every shortcut
@@ -58,7 +61,7 @@ The built app is at `~/Library/Developer/Xcode/DerivedData/QuickPad-*/Build/Prod
 | Shortcut | Action |
 |---|---|
 | **⌥N** | Toggle popover (system-wide) |
-| **⌥⇧N** | Open popover, never closes (system-wide) |
+| **⌥⇧N** | Quick Capture mini panel (system-wide) |
 | **Enter** | Append entry |
 | **Tab** | Cycle bullet type |
 | **⌘F** | Search |
@@ -68,10 +71,10 @@ The built app is at `~/Library/Developer/Xcode/DerivedData/QuickPad-*/Build/Prod
 | **⌘1-4** | Filter by type (note/task/question/idea) |
 | **⌘5** | Clear filter |
 | **⌘/** | Toggle shortcut hints overlay |
-| **Right-click entry** | Edit, Delete, Rescue, change task state, change Bullet Type |
+| **Right-click entry** | Edit, Delete, Rescue, Graduate, change task state, change Bullet Type |
 | **Click task glyph** | Toggle pending ↔ done |
 | **Hover old entry** | Shows "↑ rescue" hint (click to rescue) |
-| **Right-click menu bar icon** | Show/Hide Island, Quit |
+| **Right-click menu bar icon** | Show/Hide Island, Pinned Notes, Quit |
 
 Content shortcut: typing `* foo` writes `*priority foo` (red left border).
 
@@ -80,6 +83,8 @@ Content shortcut: typing `* foo` writes `*priority foo` (red left border).
 ```
 ~/.quickpad/
 ├── stream.md              # main stream (newest day first)
+├── pinned/                # graduated entries — one Markdown file per note
+│   └── onboarding-doc-draft.md
 └── archive/               # auto-archived done/cancelled tasks
     └── 2026-04.md
 ```
@@ -119,5 +124,6 @@ xcodebuild test -project QuickPad.xcodeproj -scheme QuickPad \
   -configuration Debug -destination 'platform=macOS'
 ```
 
-133 tests across 9 suites covering parser, writer, mutator, archiver,
-exporter, inline markdown, gravity decay, task state, and bullet type logic.
+149 tests across 10 suites covering parser, writer, mutator, archiver,
+exporter, inline markdown, gravity decay, task state, bullet type, and
+pinned-note slug + graduation logic.

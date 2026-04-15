@@ -1,28 +1,26 @@
 import SwiftUI
 
 /// Single-line input row that lives between the header and the stream.
-/// Users pick a bullet type by clicking the glyph (or cycle with Tab),
-/// type the body, hit Enter to append.
-///
-/// Intentionally dumb: the bar owns only the draft text and the current
-/// bullet selection. All disk writes go through `StreamViewModel.append`.
+/// State (bullet type + draft text) is owned by `InputBarModel` so the
+/// HintBar underneath can mutate the same fields without any coupling.
 struct InputBar: View {
     @Environment(StreamViewModel.self) private var viewModel
     @Environment(ThemeManager.self) private var theme
+    @Environment(InputBarModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var draft: String = ""
-    @State private var bulletType: BulletType = .note
     @State private var bulletBounce: Bool = false
     @FocusState private var isFocused: Bool
 
     private var font: Font { theme.uiFont(size: 12) }
 
     var body: some View {
+        @Bindable var model = model
+
         HStack(alignment: .center, spacing: 8) {
             bulletButton
 
-            TextField(placeholder, text: $draft)
+            TextField(model.bulletType.placeholder, text: $model.draft)
                 .textFieldStyle(.plain)
                 .font(font)
                 .tracking(theme.contentTracking)
@@ -41,9 +39,6 @@ struct InputBar: View {
                 .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
         .onAppear {
-            // Slight delay so the popover finishes becoming key before
-            // we grab focus — otherwise the first keystroke can get
-            // swallowed by the hosting window.
             DispatchQueue.main.async {
                 isFocused = true
             }
@@ -53,17 +48,17 @@ struct InputBar: View {
     private var bulletButton: some View {
         Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                bulletType = bulletType.next
+                model.cycleBullet()
                 bulletBounce = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 bulletBounce = false
             }
         } label: {
-            Text(bulletType.glyph)
+            Text(model.bulletType.glyph)
                 .font(font)
                 .tracking(theme.contentTracking)
-                .foregroundStyle(bulletType.glyphColor(theme: theme, scheme: colorScheme))
+                .foregroundStyle(model.bulletType.glyphColor(theme: theme, scheme: colorScheme))
                 .frame(width: 18, height: 18)
                 .scaleEffect(bulletBounce ? 1.25 : 1.0)
                 .rotationEffect(.degrees(bulletBounce ? -15 : 0))
@@ -71,16 +66,14 @@ struct InputBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(bulletType.label) — click to cycle")
+        .help("\(model.bulletType.label) — click to cycle")
     }
 
-    private var placeholder: String { bulletType.placeholder }
-
     private func submit() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        viewModel.append(bulletType: bulletType, content: text)
-        draft = ""
+        viewModel.append(bulletType: model.bulletType, content: text)
+        model.clearDraft()
         // Stay focused so the user can chain entries without touching
         // the mouse. Keep the current bullet type — if they were in a
         // "task" streak they probably want to keep logging tasks.

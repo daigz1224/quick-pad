@@ -10,6 +10,10 @@ struct PopoverRootView: View {
     @State private var systemAppearance = SystemAppearance.shared
 
     @AppStorage("appearanceMode") private var appearanceRaw: String = AppearanceMode.auto.rawValue
+    @AppStorage("showHintBar") private var showHintBar: Bool = true
+
+    /// Owns bullet-type + draft state shared between InputBar and HintBar.
+    @State private var inputModel = InputBarModel()
 
     // Search mode.
     @State private var searchQuery: String = ""
@@ -24,6 +28,10 @@ struct PopoverRootView: View {
     /// Toast message for rescue feedback.
     @State private var rescueToast: String? = nil
     @State private var rescueTimer: Timer? = nil
+
+    /// Toast for graduate feedback, with a Reveal action.
+    @State private var graduateToast: URL? = nil
+    @State private var graduateTimer: Timer? = nil
 
     /// Keyboard shortcut hints overlay.
     @State private var showShortcutHints: Bool = false
@@ -56,6 +64,10 @@ struct PopoverRootView: View {
                     SearchBar(query: $searchQuery, onDismiss: dismissSearch)
                 } else {
                     InputBar()
+                    if showHintBar {
+                        HintBar()
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
 
                 // Type filter indicator
@@ -84,6 +96,10 @@ struct PopoverRootView: View {
                     onBulletTypeChange: { entry, newType in
                         viewModel.changeBulletType(entry, newType: newType)
                     },
+                    onGraduate: { entry in
+                        viewModel.graduateEntry(entry)
+                        showGraduateToast()
+                    },
                     typeFilter: typeFilter
                 )
             }
@@ -102,6 +118,13 @@ struct PopoverRootView: View {
                     .padding(.bottom, 8)
             }
 
+            // Graduate toast
+            if let url = graduateToast {
+                graduateToastView(url)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 8)
+            }
+
             // Shortcut hints overlay
             if showShortcutHints {
                 Color.black.opacity(0.3)
@@ -114,6 +137,7 @@ struct PopoverRootView: View {
         .frame(width: 420, height: 520)
         .background(backgroundColor)
         .preferredColorScheme(effectiveScheme)
+        .environment(inputModel)
         .textSelection(.disabled)
         .focusEffectDisabled()
         .background {
@@ -156,8 +180,10 @@ struct PopoverRootView: View {
         .onAppear { viewModel.load() }
         .animation(.easeInOut(duration: 0.2), value: viewModel.undoEntry != nil)
         .animation(.easeInOut(duration: 0.2), value: rescueToast != nil)
+        .animation(.easeInOut(duration: 0.2), value: graduateToast != nil)
         .animation(.easeInOut(duration: 0.15), value: typeFilter)
         .animation(.easeInOut(duration: 0.2), value: showShortcutHints)
+        .animation(.easeInOut(duration: 0.15), value: showHintBar)
     }
 
     // MARK: - Type filter
@@ -204,16 +230,36 @@ struct PopoverRootView: View {
             return viewModel.sections
         }
         let needle = searchQuery.lowercased()
-        return viewModel.sections.compactMap { section in
-            let hits = section.entries.filter { entry in
-                entry.content.lowercased().contains(needle)
-                    || entry.rawLine.lowercased().contains(needle)
-            }
+        var results = viewModel.sections.compactMap { section -> StreamSection? in
+            let hits = section.entries.filter { matches($0, needle: needle) }
             guard !hits.isEmpty else { return nil }
             var copy = section
             copy.entries = hits
             return copy
         }
+
+        // Extend the search into ~/.quickpad/archive/*.md so months-old
+        // entries remain findable. Hits go into a single synthetic
+        // "FROM ARCHIVE" section appended to the end of the result list.
+        let archiveHits = MarkdownFileStore()
+            .loadArchives()
+            .flatMap { $0.entries }
+            .filter { matches($0, needle: needle) }
+
+        if !archiveHits.isEmpty {
+            results.append(StreamSection(
+                date: nil,
+                rawHeader: "── FROM ARCHIVE ──",
+                entries: archiveHits,
+                isReadOnly: true
+            ))
+        }
+        return results
+    }
+
+    private func matches(_ entry: StreamEntry, needle: String) -> Bool {
+        entry.content.lowercased().contains(needle)
+            || entry.rawLine.lowercased().contains(needle)
     }
 
     private var emptyStateOverride: AnyView? {
@@ -319,6 +365,54 @@ struct PopoverRootView: View {
         viewModel.undoRescue()
     }
 
+    // MARK: - Graduate toast
+
+    private func graduateToastView(_ url: URL) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "graduationcap.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(theme.accent)
+            Text("graduated → \(url.lastPathComponent)")
+                .font(theme.monoFont(size: 11))
+                .foregroundStyle(theme.textPrimary(for: effectiveScheme))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Text("Reveal")
+                    .font(theme.monoFont(size: 11, weight: .medium))
+                    .foregroundStyle(theme.accent)
+            }
+            .buttonStyle(Theme.SubtleButton())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                )
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func showGraduateToast() {
+        guard let url = viewModel.lastGraduatedNoteURL else { return }
+        graduateTimer?.invalidate()
+        graduateToast = url
+        graduateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                graduateToast = nil
+                viewModel.lastGraduatedNoteURL = nil
+            }
+        }
+    }
+
     // MARK: - Header
 
     private var header: some View {
@@ -340,6 +434,7 @@ struct PopoverRootView: View {
             }
             Spacer()
 
+            hintBarToggle
             exportButton
             appearanceButton
             detachButton
@@ -349,6 +444,20 @@ struct PopoverRootView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    private var hintBarToggle: some View {
+        Button {
+            showHintBar.toggle()
+        } label: {
+            Image(systemName: showHintBar ? "rectangle.bottomthird.inset.filled" : "rectangle")
+                .font(.system(size: 11))
+                .foregroundStyle(showHintBar ? Color.accentColor : .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(Theme.SubtleButton())
+        .help(showHintBar ? "Hide hint bar" : "Show hint bar")
     }
 
     private var exportButton: some View {

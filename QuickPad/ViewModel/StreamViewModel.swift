@@ -25,6 +25,11 @@ final class StreamViewModel {
     private let store = MarkdownFileStore()
     private let writer = StreamWriter()
     private let mutator = StreamMutator()
+    private let pinnedStore = PinnedNoteStore()
+
+    /// URL of the most recently graduated pinned note. Consumers can
+    /// read it (e.g. to reveal in Finder) and should clear it after.
+    var lastGraduatedNoteURL: URL?
 
     /// Set by AppDelegate after wiring. Used to suppress FSEvents
     /// self-triggered reloads during programmatic writes.
@@ -160,6 +165,29 @@ final class StreamViewModel {
             animatedLoad()
         } catch {
             lastWriteError = "task state change failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Graduate an entry: write a pinned-note file under
+    /// `~/.quickpad/pinned/<slug>.md`, then remove the original line
+    /// from `stream.md`. If either step fails, leaves both files
+    /// untouched (best-effort: pinned write is attempted first; on
+    /// stream-removal failure the pinned file is rolled back).
+    func graduateEntry(_ entry: StreamEntry) {
+        do {
+            let pinnedURL = try pinnedStore.graduate(entry: entry)
+            do {
+                fileWatcher?.suppressNextChange()
+                try mutator.removeLine(rawLine: entry.rawLine)
+            } catch {
+                try? FileManager.default.removeItem(at: pinnedURL)
+                throw error
+            }
+            lastGraduatedNoteURL = pinnedURL
+            lastWriteError = nil
+            animatedLoad()
+        } catch {
+            lastWriteError = "graduate failed: \(error.localizedDescription)"
         }
     }
 

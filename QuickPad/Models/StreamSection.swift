@@ -10,16 +10,23 @@ struct StreamSection: Identifiable, Hashable {
     /// The original separator line, preserved verbatim so we can round-trip.
     var rawHeader: String?
     var entries: [StreamEntry]
+    /// True for sections sourced from outside `stream.md` (e.g. the
+    /// "FROM ARCHIVE" search bucket). The UI suppresses mutation
+    /// affordances on these so a click-to-rescue or context-menu edit
+    /// can't try to mutate a file we don't own.
+    var isReadOnly: Bool
 
     init(
         id: UUID = UUID(),
         date: Date?,
         rawHeader: String?,
-        entries: [StreamEntry] = []
+        entries: [StreamEntry] = [],
+        isReadOnly: Bool = false
     ) {
         self.id = id
         self.date = date
         self.rawHeader = rawHeader
         self.entries = entries
+        self.isReadOnly = isReadOnly
     }
 }
