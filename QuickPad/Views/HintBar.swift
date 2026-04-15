@@ -22,62 +22,69 @@ struct HintBar: View {
     ]
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             ForEach(Self.bulletTypes, id: \.self) { type in
                 bulletChip(type)
             }
-            Text("·")
-                .font(theme.monoFont(size: 9))
-                .foregroundStyle(theme.textTertiary(for: colorScheme))
-                .padding(.horizontal, 2)
+            divider
             ForEach(Self.prefixes, id: \.value) { entry in
                 prefixChip(label: entry.label, value: entry.value, help: entry.help)
             }
             Spacer()
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 4)
-        .background(theme.surface(for: colorScheme).opacity(0.6))
+        .background(theme.surface(for: colorScheme).opacity(0.4))
         .overlay(alignment: .bottom) {
             ThemeFadeDivider()
         }
     }
 
+    private var divider: some View {
+        Rectangle()
+            .fill(theme.textTertiary(for: colorScheme).opacity(0.2))
+            .frame(width: 0.5, height: 9)
+            .padding(.horizontal, 4)
+    }
+
+    /// Bullet chips: only the active one carries a container. Inactive
+    /// chips are plain text so they read as "quick-select choices" not
+    /// "eight buttons demanding attention."
     @ViewBuilder
     private func bulletChip(_ type: BulletType) -> some View {
         let isActive = model.bulletType == type
         Button {
             model.setBullet(type)
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 Text(type.glyph)
-                    .foregroundStyle(type.glyphColor(theme: theme, scheme: colorScheme))
+                    .foregroundStyle(
+                        isActive
+                            ? type.glyphColor(theme: theme, scheme: colorScheme)
+                            : type.glyphColor(theme: theme, scheme: colorScheme).opacity(0.6)
+                    )
                 Text(type.label)
                     .foregroundStyle(
                         isActive
                             ? theme.textPrimary(for: colorScheme)
-                            : theme.textSecondary(for: colorScheme)
+                            : theme.textTertiary(for: colorScheme)
                     )
             }
-            .font(theme.monoFont(size: 9))
-            .padding(.horizontal, 6)
+            .font(theme.monoFont(size: 9, weight: isActive ? .medium : .regular))
+            .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(
                 Capsule()
-                    .fill(isActive ? theme.accent.opacity(0.15) : Color.clear)
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        isActive ? theme.accent.opacity(0.4) : theme.textTertiary(for: colorScheme).opacity(0.25),
-                        lineWidth: 0.5
-                    )
+                    .fill(isActive ? theme.accent.opacity(0.12) : Color.clear)
             )
         }
         .buttonStyle(.plain)
         .help("\(type.label) — click to set type")
     }
 
+    /// Prefix chips: borderless, letter-style. They insert a token,
+    /// they're not persistent state, so they shouldn't wear a button
+    /// outline.
     @ViewBuilder
     private func prefixChip(label: String, value: String, help: String) -> some View {
         Button {
@@ -85,16 +92,9 @@ struct HintBar: View {
         } label: {
             Text(label)
                 .font(theme.monoFont(size: 9))
-                .foregroundStyle(theme.textSecondary(for: colorScheme))
-                .padding(.horizontal, 6)
+                .foregroundStyle(theme.textTertiary(for: colorScheme))
+                .padding(.horizontal, 4)
                 .padding(.vertical, 2)
-                .overlay(
-                    Capsule()
-                        .strokeBorder(
-                            theme.textTertiary(for: colorScheme).opacity(0.25),
-                            lineWidth: 0.5
-                        )
-                )
         }
         .buttonStyle(.plain)
         .help(help)

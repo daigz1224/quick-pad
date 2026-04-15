@@ -36,7 +36,7 @@ struct StreamEntryRow: View {
     private static let contentSize: CGFloat = 11
 
     private var contentFont: Font { theme.contentFont(size: Self.contentSize) }
-    private var timeFont: Font    { theme.monoFont(size: 10) }
+    private var timeFont: Font    { theme.monoFont(size: 9) }
     private var tagFont: Font     { theme.monoFont(size: 9) }
     private var contentTracking: CGFloat { theme.contentTracking }
 

@@ -203,6 +203,7 @@ struct PopoverRootView: View {
         .animation(.easeInOut(duration: 0.15), value: typeFilter)
         .animation(.easeInOut(duration: 0.2), value: showShortcutHints)
         .animation(.easeInOut(duration: 0.15), value: showHintBar)
+        .animation(.easeInOut(duration: 0.15), value: showStatsBar)
         .animation(.easeInOut(duration: 0.2), value: showReview)
     }
 
@@ -438,15 +439,15 @@ struct PopoverRootView: View {
     private var header: some View {
         @Bindable var popoverController = popoverController
 
-        return HStack(spacing: 8) {
-            Image(systemName: "list.dash")
-                .foregroundStyle(.secondary)
+        return HStack(spacing: 10) {
             Text("QuickPad")
-                .font(theme.uiFont(size: 12, weight: .medium))
+                .font(theme.uiFont(size: 13, weight: .semibold))
                 .foregroundStyle(theme.textPrimary(for: effectiveScheme))
+                .tracking(0.1)
             if viewModel.isShowingSample {
                 Text("sample")
                     .font(theme.monoFont(size: 9))
+                    .tracking(0.3)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(Color.secondary.opacity(0.15), in: Capsule())
@@ -454,16 +455,42 @@ struct PopoverRootView: View {
             }
             Spacer()
 
-            hintBarToggle
-            exportButton
-            appearanceButton
-            detachButton
-            if !popoverController.isDetached {
-                pinButton
+            // Group the chrome into two clusters so 4-5 icons don't
+            // read as a single overwhelming strip. Left cluster is
+            // "view settings", right cluster is "window state".
+            HStack(spacing: 2) {
+                statsBarToggle
+                hintBarToggle
+                appearanceButton
+                exportButton
+            }
+            Rectangle()
+                .fill(theme.textTertiary(for: effectiveScheme).opacity(0.18))
+                .frame(width: 0.5, height: 14)
+                .padding(.horizontal, 2)
+            HStack(spacing: 2) {
+                detachButton
+                if !popoverController.isDetached {
+                    pinButton
+                }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private var statsBarToggle: some View {
+        Button {
+            showStatsBar.toggle()
+        } label: {
+            Image(systemName: showStatsBar ? "chart.bar.fill" : "chart.bar")
+                .font(.system(size: 10))
+                .foregroundStyle(showStatsBar ? Color.accentColor : .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(Theme.SubtleButton())
+        .help(showStatsBar ? "Hide stats strip" : "Show stats strip")
     }
 
     private var hintBarToggle: some View {

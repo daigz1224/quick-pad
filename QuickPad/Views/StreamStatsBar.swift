@@ -50,54 +50,84 @@ struct StreamStatsBar: View {
 
     var body: some View {
         let s = stats
-        HStack(spacing: 10) {
-            statChip(label: "today", value: "\(s.todayAppended)")
-            divider
-            statChip(label: "7d", value: "\(s.weekAppended)")
-            divider
-            statChip(label: "✓", value: "\(s.weekTasksClosed)", help: "tasks closed in the last 7 days")
-            divider
-            statChip(label: "↑", value: "\(s.totalRescued)", help: "lifetime rescues across visible entries")
+        // Only render chips with signal. A `✓ 0` or `↑ 0` next to a
+        // real number is just noise — the lack of value is itself
+        // information the user doesn't need reminding of.
+        HStack(spacing: 14) {
+            statChip(value: "\(s.todayAppended)", label: "today")
+            if s.weekAppended != s.todayAppended {
+                divider
+                statChip(value: "\(s.weekAppended)", label: "this week")
+            }
+            if s.weekTasksClosed > 0 {
+                divider
+                statChip(
+                    value: "\(s.weekTasksClosed)",
+                    label: "done",
+                    valueColor: theme.taskDone,
+                    help: "tasks closed in the last 7 days"
+                )
+            }
+            if s.totalRescued > 0 {
+                divider
+                statChip(
+                    value: "\(s.totalRescued)↑",
+                    label: "rescued",
+                    help: "lifetime rescues across visible entries"
+                )
+            }
             if s.staleTaskCount > 0 {
                 divider
                 staleChip(s.staleTaskCount)
             }
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(theme.surface(for: colorScheme).opacity(0.5))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 5)
+        .background(theme.surface(for: colorScheme).opacity(0.4))
         .overlay(alignment: .bottom) {
             ThemeFadeDivider()
         }
     }
 
     private var divider: some View {
-        Text("·")
-            .font(theme.monoFont(size: 9))
-            .foregroundStyle(theme.textTertiary(for: colorScheme))
+        Rectangle()
+            .fill(theme.textTertiary(for: colorScheme).opacity(0.25))
+            .frame(width: 0.5, height: 9)
     }
 
-    private func statChip(label: String, value: String, help: String? = nil) -> some View {
-        HStack(spacing: 3) {
-            Text(label)
-                .foregroundStyle(theme.textTertiary(for: colorScheme))
+    private func statChip(
+        value: String,
+        label: String,
+        valueColor: Color? = nil,
+        help: String? = nil
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
-                .foregroundStyle(theme.textSecondary(for: colorScheme))
+                .font(theme.monoFont(size: 10, weight: .medium))
+                .foregroundStyle(valueColor ?? theme.textPrimary(for: colorScheme))
+            Text(label)
+                .font(theme.monoFont(size: 9))
+                .foregroundStyle(theme.textTertiary(for: colorScheme))
+                .tracking(0.3)
         }
-        .font(theme.monoFont(size: 9))
         .help(help ?? "")
     }
 
     private func staleChip(_ count: Int) -> some View {
-        HStack(spacing: 3) {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
             Circle()
                 .fill(theme.priority)
                 .frame(width: 4, height: 4)
-            Text("\(count) stale")
+                .offset(y: -1)
+            Text("\(count)")
+                .font(theme.monoFont(size: 10, weight: .medium))
                 .foregroundStyle(theme.priority)
+            Text("stale")
+                .font(theme.monoFont(size: 9))
+                .foregroundStyle(theme.priority.opacity(0.8))
+                .tracking(0.3)
         }
-        .font(theme.monoFont(size: 9))
         .help("Pending tasks older than 7 days — open Review (⌘R) to triage")
     }
 }
