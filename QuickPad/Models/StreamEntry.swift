@@ -11,6 +11,12 @@ struct StreamEntry: Identifiable, Hashable, Codable {
     /// True when the entry has been soft-deleted (`[type>deleted]`).
     /// The UI hides these by default; undo restores them.
     var isDeleted: Bool
+    /// Number of times this entry has been rescued back to today.
+    /// Stored inline in the bracket token as `@rN` (`[task @r3] foo`).
+    /// Drives Review mode's "frequently rescued — consider Graduate"
+    /// hint and the Phase 7 stats strip. Defaults to 0; absence in
+    /// stream.md parses as 0 so old files remain forward-compatible.
+    var rescueCount: Int
     /// The original line from stream.md, kept verbatim so a future
     /// write-back never silently mutates content the parser did not
     /// fully understand.
@@ -25,6 +31,7 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         isPriority: Bool = false,
         prefixTag: String? = nil,
         isDeleted: Bool = false,
+        rescueCount: Int = 0,
         rawLine: String
     ) {
         self.id = id
@@ -35,6 +42,7 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         self.isPriority = isPriority
         self.prefixTag = prefixTag
         self.isDeleted = isDeleted
+        self.rescueCount = rescueCount
         self.rawLine = rawLine
     }
 
@@ -58,6 +66,17 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         let entryDay = cal.startOfDay(for: timestamp)
         let today = cal.startOfDay(for: Date())
         return max(0, cal.dateComponents([.day], from: entryDay, to: today).day ?? 0)
+    }
+
+    /// True for pending tasks that have been sitting open for at least
+    /// a week. Drives the small pulsing dot in `StreamEntryRow` that
+    /// asks the user to migrate or cancel — Phase 7's lightweight nudge.
+    /// Threshold (7 days) sits well below the 30-day archive rule so
+    /// stale tasks get noticed long before they're auto-archived.
+    var isStaleTask: Bool {
+        bulletType == .task
+            && (taskState == nil || taskState == .pending)
+            && ageInDays >= 7
     }
 
     /// Opacity driven by the gravity-decay curve from `ARCHITECTURE.md`.

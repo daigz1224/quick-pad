@@ -638,6 +638,29 @@ func rescueEntry(_ entry: StreamEntry) {
 - [x] 点击穿透修复（只在交互区截获事件，其余区域透明）
 - [x] 菜单栏右键 Show/Hide Island 切换
 
+### Phase 7 — 激活 review 循环（Activate the review loop）
+
+Karpathy 思想里 `append-and-review` 的 review 这一半之前几乎没有 UI 支撑。Phase 7 把它点亮：
+
+- [x] **Rescue 计数器**（schema 改动，向后兼容）
+  - bracket token 内追加 `@rN`：`[task @r3] foo`
+  - `StreamMutator.extractRescueCount` / `setRescueCount` / `bumpRescueCount`：纯函数，单元测试覆盖
+  - 所有 bracket-token mutation（删除/恢复、task 状态、bullet 类型）都通过新增的 `mutatingBracketToken` helper，先剥离 `@rN`、变换、再附加 —— 保证计数不会被无关操作吃掉
+  - 解析器 fallback：缺失 `@rN` 解析为 0，旧文件无需迁移
+- [x] **Review mode**（⌘R）卡片式
+  - `Views/ReviewMode.swift`：全 popover 覆盖层，三窗口选择器（7 / 30 / 90 天）
+  - 每张卡片：大号 glyph + 内容 + "N days ago" + 标签 + rescue 计数徽章
+  - 单键操作：`R` rescue · `G` graduate · `C` done(task)/cancel(other) · `S`/`↓` skip · `Esc` 退出
+  - `rescueCount >= 3` 触发"🎓 rescued N× — consider Graduate"提示
+  - `StreamViewModel.reviewPool(window:)`：从 sections 中筛 ±1 天窗口、未删除、task 未 done/cancelled
+- [x] **Stale-task nudge**
+  - `StreamEntry.isStaleTask`：pending task 且 ageInDays ≥ 7
+  - `StreamEntryRow` 的 trailing label 加柔和脉冲点（`theme.priority` 色，1.4s autoreverse）
+  - tooltip："Pending for N days — migrate or cancel?"
+- [x] **Stream stats 条**
+  - `Views/StreamStatsBar.swift`：header 与 InputBar 之间一行 `today N · 7d N · ✓ N · ↑ N · stale N`
+  - stream 为空或在搜索状态时隐藏
+
 ### Phase 6 — 闭环补全（Loop closure）
 
 补回设计书里跳过但属于核心循环的部分：

@@ -23,6 +23,11 @@ scope. See `docs/ARCHITECTURE.md` for the design philosophy and
   Graduate, surfaced in the menu bar's Pinned Notes submenu), Quick
   Capture mini panel (⌥⇧N), hint bar with bullet/prefix chips, archive
   search.
+- **Phase 7 — Activate the review loop** · Review mode (⌘R) with
+  card-by-card 7/30/90-day buckets and single-key Rescue/Graduate/
+  Done/Skip; rescue counter stored inline as `@rN`; stale-task pulse
+  (≥7 day pending tasks); stream stats strip showing today / 7d /
+  closure / rescues / stale at a glance.
 
 ## Considering
 
@@ -33,14 +38,15 @@ personal pain warrants them:
   because there's no row-selection focus model in the popover yet.
 - **Merge entries (⌘M)** — combine selected entries during review.
 - **`~/.quickpad/config.toml`** — user-configurable hotkeys, gravity
-  curve, archive threshold, font. Currently all values are hardcoded.
+  curve, archive threshold, font, review thresholds. Currently all
+  values are hardcoded.
 - **Multi-display refinements for Island** — smarter placement when the
   active screen changes mid-session.
 - **Per-entry customisable archive threshold** — today it's a single
   30-day rule across all done/cancelled tasks.
-- **Rescue counter / auto-graduate suggestion** — track how often an
-  entry gets rescued; when it crosses a threshold, surface a "you keep
-  coming back to this — graduate it?" hint. Needs a schema addition.
+- **Auto-graduate suggestion in the stream view** — Phase 7 surfaces
+  the 🎓 hint inside Review mode; could also pop up inline on a row
+  when its `@rN` crosses a threshold without waiting for review.
 
 ## Not pursuing
 

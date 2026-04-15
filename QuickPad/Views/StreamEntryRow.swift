@@ -27,6 +27,8 @@ struct StreamEntryRow: View {
     @State private var editDraft: String = ""
     @State private var isHovering: Bool = false
     @State private var justToggled: Bool = false
+    /// Drives the soft opacity pulse on the stale-task nudge dot.
+    @State private var stalePulse: Bool = false
     @FocusState private var isEditFocused: Bool
 
     // Sizes chosen so Chinese + Latin mix stays readable in a 420-wide
@@ -328,12 +330,35 @@ struct StreamEntryRow: View {
                     removal: .opacity
                 ))
         } else if let time = timeLabel {
-            Text(time)
-                .font(timeFont)
-                .foregroundStyle(theme.timestampColor(for: colorScheme))
-                .fixedSize()
+            HStack(spacing: 4) {
+                if entry.isStaleTask { staleNudgeDot }
+                Text(time)
+                    .font(timeFont)
+                    .foregroundStyle(theme.timestampColor(for: colorScheme))
+                    .fixedSize()
+            }
+            .transition(.opacity)
+        } else if entry.isStaleTask {
+            // Stale task with no timestamp — show only the dot.
+            staleNudgeDot
                 .transition(.opacity)
         }
+    }
+
+    /// Soft pulsing dot that nudges "this task has been pending too
+    /// long". Color picked from the priority palette so it reads as
+    /// "needs attention" without screaming for it.
+    private var staleNudgeDot: some View {
+        Circle()
+            .fill(theme.priority)
+            .frame(width: 5, height: 5)
+            .opacity(stalePulse ? 1.0 : 0.35)
+            .help("Pending for \(entry.ageInDays) days — migrate or cancel?")
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    stalePulse = true
+                }
+            }
     }
 
     /// Cached formatter for absolute 24h time labels ("15:42"). Created

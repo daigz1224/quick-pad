@@ -6,7 +6,36 @@ dates; the app isn't versioned yet, so entries are grouped by ship date.
 
 ## [Unreleased]
 
-### Added
+### Added — Phase 7 (Activate the review loop)
+- **Review mode** (**⌘R**). Card-by-card review of entries from
+  exactly 7 / 30 / 90 days ago. Each card surfaces one entry and
+  forces a real decision: Rescue (R), Graduate (G), Done/Cancel (C),
+  or Skip (S / ↓). Esc exits. Closes the dormant "review" half of
+  Karpathy's `append-and-review` loop — without it, the gravity
+  system was just hiding old data, not surfacing it back.
+- **Rescue counter** stored inline in the bracket token as `@rN`:
+  `[task @r3] foo`. Missing `@rN` parses as 0, so existing streams
+  remain forward-compatible. Every rescue increments the counter.
+  In Review, entries with `@r3` or higher get a 🎓 hint suggesting
+  Graduate.
+- **Stale-task nudge**: pending `[task]` entries older than 7 days
+  show a soft pulsing dot in the trailing label area. Tooltip:
+  "Pending for N days — migrate or cancel?". Threshold sits well
+  below the 30-day archive rule so stale tasks get noticed before
+  they're auto-archived.
+- **Stream stats strip** between header and input row:
+  `today N · 7d N · ✓ N · ↑ N · stale N`. Shows what the stream
+  currently looks like — closure rate, lifetime rescues, count of
+  stale tasks waiting for triage. Hidden when the stream is empty
+  or during search.
+
+### Changed
+- All bracket-token mutations (delete/undelete, task state change,
+  bullet type change) route through a new `mutatingBracketToken`
+  helper that splits off `@rN` first and reattaches it after, so
+  the rescue counter survives every other operation.
+
+### Added — Phase 6
 - **Graduate to Pinned Note** (right-click entry → Graduate). Promotes
   a stream entry into its own `~/.quickpad/pinned/<slug>.md` file with
   a small frontmatter recording the original timestamp and bullet type,
@@ -29,7 +58,7 @@ dates; the app isn't versioned yet, so entries are grouped by ship date.
   `~/.quickpad/archive/*.md` file. Hits appear in a read-only
   `── FROM ARCHIVE ──` section at the bottom of the result list.
 
-### Changed
+### Changed — Phase 6
 - Entries surfaced from the archive are read-only in the list — the
   context menu and click-to-rescue affordance are suppressed so a
   mutation can never target a file the row's section doesn't own.

@@ -168,6 +168,49 @@ final class StreamViewModel {
         }
     }
 
+    // MARK: - Phase 7: Review mode pool
+
+    /// One of the three "on this day" buckets surfaced in Review mode.
+    /// Picked by the user when they enter review.
+    enum ReviewWindow: Int, CaseIterable, Identifiable {
+        case sevenDays = 7
+        case thirtyDays = 30
+        case ninetyDays = 90
+
+        var id: Int { rawValue }
+        var label: String { "\(rawValue) days ago" }
+    }
+
+    /// Entries eligible for review at the chosen window:
+    /// - Timestamp falls within ±1 calendar day of (today − N days),
+    ///   so weekend/timezone slop doesn't make the bucket empty.
+    /// - Not soft-deleted.
+    /// - Not a closed task (done / cancelled) — those are settled.
+    /// Migrated tasks DO appear because "did this ever come back" is
+    /// exactly what review should ask.
+    func reviewPool(window: ReviewWindow, now: Date = Date()) -> [StreamEntry] {
+        let cal = Calendar.current
+        let target = cal.startOfDay(for: cal.date(byAdding: .day, value: -window.rawValue, to: now) ?? now)
+        let lower = cal.date(byAdding: .day, value: -1, to: target) ?? target
+        let upper = cal.date(byAdding: .day, value: 1, to: target) ?? target
+
+        var pool: [StreamEntry] = []
+        for section in sections {
+            for entry in section.entries where !entry.isDeleted {
+                guard let ts = entry.timestamp else { continue }
+                let day = cal.startOfDay(for: ts)
+                guard day >= lower && day <= upper else { continue }
+                if entry.bulletType == .task,
+                   let state = entry.taskState,
+                   state == .done || state == .cancelled {
+                    continue
+                }
+                pool.append(entry)
+            }
+        }
+        return pool
+    }
+
     /// Graduate an entry: write a pinned-note file under
     /// `~/.quickpad/pinned/<slug>.md`, then remove the original line
     /// from `stream.md`. If either step fails, leaves both files

@@ -20,9 +20,17 @@ struct ShortcutHintsView: View {
         ]),
         ("Actions", [
             ("⌘F", "Search stream + archive"),
+            ("⌘R", "Review mode (cards from N days ago)"),
             ("⌘Z", "Undo delete / rescue"),
             ("⌘E", "Export visible entries"),
             ("RC", "Right-click row → Graduate"),
+        ]),
+        ("Review mode", [
+            ("R", "Rescue current card to today"),
+            ("G", "Graduate to pinned note"),
+            ("C", "Done (task) / Cancel (other)"),
+            ("S", "Skip · ↓ also works"),
+            ("Esc", "Exit review"),
         ]),
         ("Filters", [
             ("⌘1", "Notes only"),

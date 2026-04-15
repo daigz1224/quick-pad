@@ -279,7 +279,8 @@ final class Phase2Tests: XCTestCase {
 
         let result = try String(contentsOf: tempFile, encoding: .utf8)
         XCTAssertFalse(result.contains("2026-04-01T10:00:00"))
-        XCTAssertTrue(result.contains("[idea] old idea to rescue"))
+        // Rescue bumps the inline `@rN` counter (Phase 7).
+        XCTAssertTrue(result.contains("[idea @r1] old idea to rescue"))
 
         let lines = result.components(separatedBy: "\n")
         let sepIdx = lines.firstIndex(where: { $0.contains(todaySep) })
@@ -309,7 +310,8 @@ final class Phase2Tests: XCTestCase {
         let result = try String(contentsOf: tempFile, encoding: .utf8)
         let todaySep = StreamMutator.separatorLine(for: now)
         XCTAssertTrue(result.contains(todaySep), "Should create today's separator")
-        XCTAssertTrue(result.contains("[note] ancient entry"))
+        // Rescue bumps the inline `@rN` counter (Phase 7).
+        XCTAssertTrue(result.contains("[note @r1] ancient entry"))
     }
 
     func testRescueThrowsOnMissingLine() throws {

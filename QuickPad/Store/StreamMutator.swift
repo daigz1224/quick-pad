@@ -114,8 +114,13 @@ struct StreamMutator {
         now: Date,
         fileURL: URL
     ) throws {
-        // 2. Build the new line with updated timestamp.
-        let newLine = Self.rebuildLineWithTimestamp(oldRawLine: rawLine, now: now)
+        // 2. Build the new line with updated timestamp + bumped @rN.
+        //    Bumping happens BEFORE the timestamp swap so the bracket
+        //    surgery operates on the original line (cheaper than
+        //    re-parsing the rebuilt line, and the order doesn't matter
+        //    semantically).
+        let withBumpedCount = Self.bumpRescueCount(inRawLine: rawLine)
+        let newLine = Self.rebuildLineWithTimestamp(oldRawLine: withBumpedCount, now: now)
 
         // 3. Find today's separator; create one if absent.
         let todaySep = Self.separatorLine(for: now)
@@ -211,22 +216,14 @@ struct StreamMutator {
     /// Pure helper: replace the bracket token's bullet type.
     /// `[task>done] foo` → `[note] foo`  (strips task state)
     /// `[note] foo` → `[task] foo`       (no state suffix added for task)
+    /// Preserves `@rN` rescue count.
     static func replaceBulletType(rawLine: String, newType: BulletType) -> String {
-        guard let openBracket = rawLine.firstIndex(of: "["),
-              let closeBracket = rawLine.firstIndex(of: "]") else {
-            return rawLine
+        mutatingBracketToken(in: rawLine) { cleaned, count in
+            let isDeleted = cleaned.contains(">deleted")
+            var newToken = newType.rawValue
+            if isDeleted { newToken += ">deleted" }
+            return (newToken, count)
         }
-        let token = String(rawLine[rawLine.index(after: openBracket)..<closeBracket])
-
-        // Preserve >deleted suffix if present.
-        let isDeleted = token.contains(">deleted")
-
-        var newToken = newType.rawValue
-        if isDeleted { newToken += ">deleted" }
-
-        let prefix = String(rawLine[rawLine.startIndex...openBracket])
-        let suffix = String(rawLine[closeBracket...])
-        return prefix + newToken + suffix
     }
 
     // MARK: - Line manipulation (pure, testable)
@@ -251,22 +248,24 @@ struct StreamMutator {
 
     /// `[note] foo` → `[note>deleted] foo`
     /// `[task>done] bar` → `[task>done>deleted] bar`
+    /// `[task @r3] bar` → `[task>deleted @r3] bar` (`@rN` preserved)
     /// Already-deleted lines are returned unchanged.
     static func insertDeletedSuffix(_ rawLine: String) -> String {
-        guard !rawLine.contains(">deleted]") else { return rawLine }
-        guard let closeBracket = rawLine.firstIndex(of: "]") else {
-            return rawLine
+        mutatingBracketToken(in: rawLine) { cleaned, count in
+            if cleaned.contains(">deleted") {
+                return (cleaned, count)
+            }
+            return (cleaned + ">deleted", count)
         }
-        var result = rawLine
-        result.insert(contentsOf: ">deleted", at: closeBracket)
-        return result
     }
 
     /// `[note>deleted] foo` → `[note] foo`
     /// `[task>done>deleted] bar` → `[task>done] bar`
-    /// Lines without `>deleted` are returned unchanged.
+    /// Lines without `>deleted` are returned unchanged. `@rN` is preserved.
     static func removeDeletedSuffix(_ rawLine: String) -> String {
-        rawLine.replacingOccurrences(of: ">deleted", with: "")
+        mutatingBracketToken(in: rawLine) { cleaned, count in
+            (cleaned.replacingOccurrences(of: ">deleted", with: ""), count)
+        }
     }
 
     // MARK: - File I/O
@@ -322,34 +321,73 @@ struct StreamMutator {
     /// Replace the task state suffix in a bracket token.
     /// `[task] foo` → `[task>done] foo`
     /// `[task>pending] foo` → `[task>done] foo`
-    /// Non-task lines are returned unchanged.
+    /// Non-task lines are returned unchanged. `@rN` is preserved.
     static func replaceTaskState(rawLine: String, newState: TaskState) -> String {
+        mutatingBracketToken(in: rawLine) { cleaned, count in
+            let isDeleted = cleaned.contains(">deleted")
+            let withoutDel = cleaned.replacingOccurrences(of: ">deleted", with: "")
+            let head = withoutDel.split(separator: ">", maxSplits: 1).first.map(String.init) ?? withoutDel
+            guard head == "task" else { return (cleaned, count) }
+
+            var newToken: String = (newState == .pending) ? "task" : "task>\(newState.rawValue)"
+            if isDeleted { newToken += ">deleted" }
+            return (newToken, count)
+        }
+    }
+
+    // MARK: - Rescue count (`@rN` inside the bracket token)
+
+    /// Extract the rescue count from a bracket token. Returns 0 + the
+    /// original token if no `@rN` segment is present. Removes the
+    /// `@rN` part (and any leading whitespace) from the cleaned token
+    /// so downstream `>deleted` / task-state parsing isn't affected.
+    static func extractRescueCount(fromToken token: String) -> (count: Int, cleaned: String) {
+        guard let range = token.range(of: #"\s*@r(\d+)"#, options: .regularExpression) else {
+            return (0, token)
+        }
+        let match = String(token[range])
+        let digits = match.drop { !$0.isNumber }
+        let count = Int(digits) ?? 0
+        var cleaned = token
+        cleaned.removeSubrange(range)
+        return (count, cleaned.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Replace any existing `@rN` with one reflecting `count`. A count
+    /// of 0 emits the bare token (no suffix), keeping never-rescued
+    /// entries pristine.
+    static func setRescueCount(inToken token: String, count: Int) -> String {
+        let stripped = extractRescueCount(fromToken: token).cleaned
+        return count == 0 ? stripped : "\(stripped) @r\(count)"
+    }
+
+    /// Increment the rescue count inside the bracket token of a raw
+    /// stream line. Idempotent w.r.t. format: missing `@rN` is treated
+    /// as 0 and becomes `@r1`.
+    static func bumpRescueCount(inRawLine rawLine: String) -> String {
+        mutatingBracketToken(in: rawLine) { cleaned, count in
+            (cleaned, count + 1)
+        }
+    }
+
+    /// Generic surgery on the bracket token of a raw stream line.
+    /// Splits the token into `cleaned` (everything except `@rN`) and
+    /// `count`, lets the caller transform either, and re-renders the
+    /// line. All helpers that touch the bracket should go through this
+    /// so `@rN` survives unrelated mutations.
+    private static func mutatingBracketToken(
+        in rawLine: String,
+        transform: (_ cleaned: String, _ count: Int) -> (cleaned: String, count: Int)
+    ) -> String {
         guard let openBracket = rawLine.firstIndex(of: "["),
               let closeBracket = rawLine.firstIndex(of: "]") else {
             return rawLine
         }
         let token = String(rawLine[rawLine.index(after: openBracket)..<closeBracket])
+        let (count, cleaned) = extractRescueCount(fromToken: token)
+        let (newCleaned, newCount) = transform(cleaned, count)
+        let newToken = setRescueCount(inToken: newCleaned, count: newCount)
 
-        // Strip >deleted suffix temporarily if present; we'll re-add it.
-        let isDeleted = token.contains(">deleted")
-        let cleaned = token.replacingOccurrences(of: ">deleted", with: "")
-
-        // Must be a task-type entry.
-        let head = cleaned.split(separator: ">", maxSplits: 1).first.map(String.init) ?? cleaned
-        guard head == "task" else { return rawLine }
-
-        // Build new token.
-        var newToken: String
-        if newState == .pending {
-            newToken = "task"
-        } else {
-            newToken = "task>\(newState.rawValue)"
-        }
-        if isDeleted {
-            newToken += ">deleted"
-        }
-
-        // Reconstruct the line.
         let prefix = String(rawLine[rawLine.startIndex...openBracket])
         let suffix = String(rawLine[closeBracket...])
         return prefix + newToken + suffix

@@ -24,6 +24,10 @@ recent changes, and `ROADMAP.md` for plans.
 - **Graduate to pinned note** — right-click → Graduate writes the entry to `~/.quickpad/pinned/<slug>.md` and pulls it out of the stream; pinned notes appear under the menu bar's right-click → **Pinned Notes** submenu
 - **Inline Markdown** — `` `code` ``, **bold**, `[links](url)` render natively
 - **Search** — **⌘F** full-text search across the live stream *and* every `~/.quickpad/archive/*.md` file; archive hits appear under a `── FROM ARCHIVE ──` divider
+- **Review mode** — **⌘R** opens a card-by-card review of entries from 7 / 30 / 90 days ago; each card offers Rescue · Graduate · Done/Cancel · Skip with single-key shortcuts. Closes Karpathy's review loop without inviting list-skim
+- **Rescue counter** — every rescue bumps `@rN` inside the bracket token; entries rescued ≥3 times get a 🎓 hint in Review suggesting Graduate
+- **Stale-task nudge** — pending tasks older than 7 days get a soft pulsing dot in the trailing label (tooltip: "Pending for N days — migrate or cancel?")
+- **Stats strip** — between header and input: `today N · 7d N · ✓ N · ↑ N · stale N` so you can see the stream's current shape at a glance
 - **Type filter** — **⌘1-4** to filter by note/task/question/idea, **⌘5** to clear
 - **Export** — **⌘E** exports visible entries as Markdown via save dialog
 - **Shortcut hints** — **⌘/** toggles an overlay listing every shortcut
@@ -64,7 +68,8 @@ The built app is at `~/Library/Developer/Xcode/DerivedData/QuickPad-*/Build/Prod
 | **⌥⇧N** | Quick Capture mini panel (system-wide) |
 | **Enter** | Append entry |
 | **Tab** | Cycle bullet type |
-| **⌘F** | Search |
+| **⌘F** | Search (stream + archive) |
+| **⌘R** | Review mode (cards) |
 | **⌘D** | Detach / reattach floating window |
 | **⌘E** | Export visible entries as Markdown |
 | **⌘Z** | Undo delete or rescue |
@@ -112,6 +117,7 @@ concurrent vim edits.
 
 - **Bullet types**: `note`, `task`, `question`, `idea` (the legacy `event` token still parses as `question`)
 - **Task states**: `task>done`, `task>migrated`, `task>cancelled`
+- **Rescue count**: `[task @r3]` means rescued back to today 3 times; missing `@rN` parses as 0
 - **Soft delete**: `[note>deleted]` — hidden from UI, cleaned after 30 days
 - **Ordering**: newest day at top, newest entry first within each day
 - **Content prefixes**: `read:`, `watch:`, `listen:`, `?` are shown as tags
@@ -124,6 +130,7 @@ xcodebuild test -project QuickPad.xcodeproj -scheme QuickPad \
   -configuration Debug -destination 'platform=macOS'
 ```
 
-149 tests across 10 suites covering parser, writer, mutator, archiver,
-exporter, inline markdown, gravity decay, task state, bullet type, and
-pinned-note slug + graduation logic.
+168 tests across 11 suites covering parser, writer, mutator, archiver,
+exporter, inline markdown, gravity decay, task state, bullet type,
+pinned-note slug + graduation logic, and the `@rN` rescue-count
+schema.

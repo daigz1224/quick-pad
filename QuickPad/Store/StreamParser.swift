@@ -98,7 +98,12 @@ enum StreamParser {
         guard rest.hasPrefix("["), let closeIdx = rest.firstIndex(of: "]") else {
             return unknown(rawLine: rawLine)
         }
-        let typeToken = String(rest[rest.index(after: rest.startIndex)..<closeIdx])
+        let rawTypeToken = String(rest[rest.index(after: rest.startIndex)..<closeIdx])
+
+        // Strip `@rN` first so its presence doesn't interfere with the
+        // `>deleted` / task-state splits below. Missing `@rN` parses
+        // as count 0 — old streams remain forward-compatible.
+        let (rescueCount, typeToken) = StreamMutator.extractRescueCount(fromToken: rawTypeToken)
 
         // Strip `>deleted` suffix before parsing the bullet type so
         // `[note>deleted]` and `[task>done>deleted]` parse correctly.
@@ -141,6 +146,7 @@ enum StreamParser {
             isPriority: isPriority,
             prefixTag: prefixTag,
             isDeleted: isDeleted,
+            rescueCount: rescueCount,
             rawLine: rawLine
         )
     }

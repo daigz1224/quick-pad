@@ -11,6 +11,7 @@ struct PopoverRootView: View {
 
     @AppStorage("appearanceMode") private var appearanceRaw: String = AppearanceMode.auto.rawValue
     @AppStorage("showHintBar") private var showHintBar: Bool = true
+    @AppStorage("showStatsBar") private var showStatsBar: Bool = true
 
     /// Owns bullet-type + draft state shared between InputBar and HintBar.
     @State private var inputModel = InputBarModel()
@@ -36,6 +37,9 @@ struct PopoverRootView: View {
     /// Keyboard shortcut hints overlay.
     @State private var showShortcutHints: Bool = false
 
+    /// Review mode overlay (⌘R).
+    @State private var showReview: Bool = false
+
 
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
@@ -60,6 +64,10 @@ struct PopoverRootView: View {
             VStack(spacing: 0) {
                 header
                 ThemeFadeDivider()
+                if showStatsBar && !viewModel.sections.isEmpty && !isSearching {
+                    StreamStatsBar(sections: viewModel.sections)
+                        .transition(.opacity)
+                }
                 if isSearching {
                     SearchBar(query: $searchQuery, onDismiss: dismissSearch)
                 } else {
@@ -125,6 +133,13 @@ struct PopoverRootView: View {
                     .padding(.bottom, 8)
             }
 
+            // Review mode overlay (⌘R)
+            if showReview {
+                ReviewMode(onClose: { showReview = false })
+                    .frame(width: 420, height: 520)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            }
+
             // Shortcut hints overlay
             if showShortcutHints {
                 Color.black.opacity(0.3)
@@ -172,6 +187,10 @@ struct PopoverRootView: View {
                 // ⌘/ shortcut hints
                 Button("Hints") { showShortcutHints.toggle() }
                     .keyboardShortcut("/", modifiers: .command)
+
+                // ⌘R review mode
+                Button("Review") { showReview.toggle() }
+                    .keyboardShortcut("r", modifiers: .command)
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -184,6 +203,7 @@ struct PopoverRootView: View {
         .animation(.easeInOut(duration: 0.15), value: typeFilter)
         .animation(.easeInOut(duration: 0.2), value: showShortcutHints)
         .animation(.easeInOut(duration: 0.15), value: showHintBar)
+        .animation(.easeInOut(duration: 0.2), value: showReview)
     }
 
     // MARK: - Type filter
