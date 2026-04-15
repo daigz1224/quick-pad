@@ -5,8 +5,8 @@ final class BulletTypeTests: XCTestCase {
 
     func testNextCyclesThroughUserFacingTypes() {
         XCTAssertEqual(BulletType.note.next, .task)
-        XCTAssertEqual(BulletType.task.next, .event)
-        XCTAssertEqual(BulletType.event.next, .idea)
+        XCTAssertEqual(BulletType.task.next, .question)
+        XCTAssertEqual(BulletType.question.next, .idea)
         XCTAssertEqual(BulletType.idea.next, .note)
     }
 
@@ -20,8 +20,14 @@ final class BulletTypeTests: XCTestCase {
     func testParseBareToken() {
         XCTAssertEqual(BulletType.parse(token: "note"), .note)
         XCTAssertEqual(BulletType.parse(token: "task"), .task)
-        XCTAssertEqual(BulletType.parse(token: "event"), .event)
+        XCTAssertEqual(BulletType.parse(token: "question"), .question)
         XCTAssertEqual(BulletType.parse(token: "idea"), .idea)
+    }
+
+    func testParseLegacyEventTokenMapsToQuestion() {
+        // Streams written before the event→question rename must
+        // continue to load. `[event]` is a legacy alias for `[question]`.
+        XCTAssertEqual(BulletType.parse(token: "event"), .question)
     }
 
     func testParseTokenWithTaskStateSuffix() {
@@ -45,8 +51,8 @@ final class BulletTypeTests: XCTestCase {
         // stream.md format drifts and existing files look different.
         XCTAssertEqual(BulletType.note.glyph, "—")
         XCTAssertEqual(BulletType.task.glyph, "☐")
-        XCTAssertEqual(BulletType.event.glyph, "○")
+        XCTAssertEqual(BulletType.question.glyph, "?")
         XCTAssertEqual(BulletType.idea.glyph, "!")
-        XCTAssertEqual(BulletType.unknown.glyph, "?")
+        XCTAssertEqual(BulletType.unknown.glyph, "⋯")
     }
 }

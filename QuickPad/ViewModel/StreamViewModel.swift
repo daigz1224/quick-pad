@@ -138,7 +138,7 @@ final class StreamViewModel {
         }
     }
 
-    /// Change an entry's bullet type (note/task/event/idea).
+    /// Change an entry's bullet type (note/task/question/idea).
     func changeBulletType(_ entry: StreamEntry, newType: BulletType) {
         guard newType != entry.bulletType else { return }
         do {

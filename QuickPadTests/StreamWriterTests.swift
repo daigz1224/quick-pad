@@ -234,7 +234,7 @@ final class StreamWriterTests: XCTestCase {
 
     func testAllBulletTypesRenderTheirRawValue() {
         let now = makeDate(2026, 4, 9)
-        for type in [BulletType.note, .task, .event, .idea] {
+        for type in [BulletType.note, .task, .question, .idea] {
             let out = StreamWriter.buildAppended(
                 existing: "",
                 bulletType: type,

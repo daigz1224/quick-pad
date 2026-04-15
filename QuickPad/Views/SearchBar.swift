@@ -9,9 +9,10 @@ struct SearchBar: View {
     var onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(ThemeManager.self) private var theme
     @FocusState private var isFocused: Bool
 
-    private static let font = Font.system(size: 12, design: .monospaced)
+    private var font: Font { theme.uiFont(size: 12) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -22,8 +23,8 @@ struct SearchBar: View {
 
             TextField("search stream", text: $query)
                 .textFieldStyle(.plain)
-                .font(Self.font)
-                .tracking(-0.3)
+                .font(font)
+                .tracking(theme.contentTracking)
                 .focused($isFocused)
                 // Escape closes search mode (SwiftUI intercepts this
                 // before NSPopover's transient auto-close sees it, so
@@ -49,10 +50,10 @@ struct SearchBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Theme.surface(for: colorScheme))
+        .background(theme.surface(for: colorScheme))
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(isFocused ? Theme.event.opacity(0.3) : Color.secondary.opacity(0.1))
+                .fill(isFocused ? theme.accent.opacity(0.3) : Color.secondary.opacity(0.1))
                 .frame(height: isFocused ? 1.5 : 0.5)
                 .animation(.easeInOut(duration: 0.2), value: isFocused)
         }

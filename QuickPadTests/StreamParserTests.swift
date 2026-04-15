@@ -91,11 +91,23 @@ final class StreamParserTests: XCTestCase {
 
         - 2026-04-09T10:00+09:00 [note] a note
         - 2026-04-09T10:01+09:00 [task] a task
-        - 2026-04-09T10:02+09:00 [event] an event
+        - 2026-04-09T10:02+09:00 [question] a question?
         - 2026-04-09T10:03+09:00 [idea] an idea
         """
         let sections = StreamParser.parse(text)
-        XCTAssertEqual(sections[0].entries.map(\.bulletType), [.note, .task, .event, .idea])
+        XCTAssertEqual(sections[0].entries.map(\.bulletType), [.note, .task, .question, .idea])
+    }
+
+    func testParsesLegacyEventAsQuestion() {
+        // Back-compat: streams written before the event→question
+        // rename should still load, with `[event]` rendered as `.question`.
+        let text = """
+        --- 2026-04-09 Thursday ---
+
+        - 2026-04-09T14:00+09:00 [event] architecture review meeting
+        """
+        let sections = StreamParser.parse(text)
+        XCTAssertEqual(sections[0].entries.first?.bulletType, .question)
     }
 
     func testParsesAllTaskStates() {

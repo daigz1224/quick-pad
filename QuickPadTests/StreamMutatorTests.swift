@@ -93,7 +93,7 @@ final class StreamMutatorTests: XCTestCase {
     // MARK: - Round-trip: insert + remove
 
     func testDeletedSuffixRoundTrip() {
-        let original = "- 2026-04-09T22:31+09:00 [event] meeting"
+        let original = "- 2026-04-09T22:31+09:00 [question] still a question?"
         let deleted = StreamMutator.insertDeletedSuffix(original)
         let restored = StreamMutator.removeDeletedSuffix(deleted)
         XCTAssertEqual(restored, original)

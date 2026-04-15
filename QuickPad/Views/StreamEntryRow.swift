@@ -18,18 +18,23 @@ struct StreamEntryRow: View {
     /// Called when the user changes the bullet type via context menu.
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
 
+    @Environment(ThemeManager.self) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var isEditing: Bool = false
     @State private var editDraft: String = ""
     @State private var isHovering: Bool = false
     @State private var justToggled: Bool = false
     @FocusState private var isEditFocused: Bool
 
-    // Fonts are defined once so content / glyph / time / tag all stay
-    // locked to the same baseline. Sizes chosen so Chinese + Latin mix
-    // stays readable in a 420-wide popover without wrapping too aggressively.
-    private static let contentFont = Font.system(size: 11)
-    private static let timeFont = Font.system(size: 10, design: .monospaced)
-    private static let tagFont = Font.system(size: 9, design: .monospaced)
+    // Sizes chosen so Chinese + Latin mix stays readable in a 420-wide
+    // popover without wrapping too aggressively.
+    private static let contentSize: CGFloat = 11
+
+    private var contentFont: Font { theme.contentFont(size: Self.contentSize) }
+    private var timeFont: Font    { theme.monoFont(size: 10) }
+    private var tagFont: Font     { theme.monoFont(size: 9) }
+    private var contentTracking: CGFloat { theme.contentTracking }
 
     /// Whether this entry is old enough to show the "click to rescue" hint.
     private var isRescuable: Bool {
@@ -48,32 +53,33 @@ struct StreamEntryRow: View {
                 }
                 if let tag = entry.prefixTag {
                     Text(tag)
-                        .font(Self.tagFont)
-                        .foregroundStyle(.secondary)
+                        .font(tagFont)
+                        .foregroundStyle(theme.textSecondary(for: colorScheme))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.08), in: Capsule())
+                        .background(theme.textSecondary(for: colorScheme).opacity(0.12), in: Capsule())
                 }
             }
 
             Spacer(minLength: 6)
 
             trailingLabel
-                .frame(width: 46, alignment: .trailing)
+                .frame(width: 38, alignment: .trailing)
                 .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
         .overlay(alignment: .leading) {
             if entry.isPriority {
                 Capsule()
-                    .fill(Theme.priority)
+                    .fill(theme.priority)
                     .frame(width: 2)
                     .padding(.vertical, 2)
                     .offset(x: -6)
             }
         }
+        .padding(.vertical, theme.rowVerticalPadding)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.primary.opacity(isHovering ? 0.04 : 0))
+            RoundedRectangle(cornerRadius: theme.cornerRadius)
+                .fill(isHovering ? theme.hover(for: colorScheme) : Color.clear)
         )
         .animation(.easeInOut(duration: 0.15), value: isHovering)
         .contentShape(Rectangle())
@@ -129,7 +135,7 @@ struct StreamEntryRow: View {
     @ViewBuilder
     private var bulletTypeMenu: some View {
         Menu {
-            ForEach([BulletType.note, .task, .event, .idea], id: \.self) { type in
+            ForEach([BulletType.note, .task, .question, .idea], id: \.self) { type in
                 Button {
                     onBulletTypeChange?(entry, type)
                 } label: {
@@ -189,8 +195,8 @@ struct StreamEntryRow: View {
         HStack(spacing: 4) {
             TextField("content", text: $editDraft)
                 .textFieldStyle(.plain)
-                .font(Self.contentFont)
-                .tracking(-0.15)
+                .font(contentFont)
+                .tracking(contentTracking)
                 .focused($isEditFocused)
                 .onSubmit(commitEdit)
                 .onExitCommand(perform: cancelEdit)
@@ -199,7 +205,7 @@ struct StreamEntryRow: View {
             } label: {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(theme.taskDone)
             }
             .buttonStyle(.plain)
             Button {
@@ -207,13 +213,13 @@ struct StreamEntryRow: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.textTertiary(for: colorScheme))
             }
             .buttonStyle(.plain)
         }
         .padding(.vertical, 1)
         .padding(.horizontal, 4)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+        .background(theme.surface(for: colorScheme), in: RoundedRectangle(cornerRadius: 4))
     }
 
     private func beginEditing() {
@@ -241,10 +247,13 @@ struct StreamEntryRow: View {
 
     // MARK: - Display
 
+    private var glyphColor: Color {
+        entry.bulletType.glyphColor(theme: theme, scheme: colorScheme, taskState: entry.taskState)
+    }
+
     private var glyphView: some View {
         Group {
             if entry.bulletType == .task {
-                // Clickable glyph for tasks: cycles pending → done.
                 Button {
                     let next: TaskState = (entry.taskState == .done) ? .pending : .done
                     onTaskStateChange?(entry, next)
@@ -254,9 +263,10 @@ struct StreamEntryRow: View {
                     }
                 } label: {
                     Text(entry.displayGlyph)
-                        .font(Self.contentFont)
-                        .tracking(-0.15)
+                        .font(contentFont)
+                        .tracking(contentTracking)
                         .foregroundStyle(glyphColor)
+                        .lineLimit(1)
                         .frame(width: 12, alignment: .leading)
                         .scaleEffect(justToggled ? 1.2 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justToggled)
@@ -265,9 +275,10 @@ struct StreamEntryRow: View {
                 .buttonStyle(.plain)
             } else {
                 Text(entry.displayGlyph)
-                    .font(Self.contentFont)
-                    .tracking(-0.15)
+                    .font(contentFont)
+                    .tracking(contentTracking)
                     .foregroundStyle(glyphColor)
+                    .lineLimit(1)
                     .frame(width: 12, alignment: .leading)
             }
         }
@@ -275,11 +286,19 @@ struct StreamEntryRow: View {
 
     private var contentLine: some View {
         let body = entry.content.isEmpty ? entry.rawLine : entry.content
-        return InlineMarkdown.render(body, query: highlightQuery)
-            .font(Self.contentFont)
-            .tracking(-0.15)
-            .foregroundStyle(.primary)
-            .lineSpacing(1)
+        let shouldItalic = theme.ideaItalic && entry.bulletType == .idea
+        return InlineMarkdown.render(
+            body,
+            theme: theme,
+            scheme: colorScheme,
+            contentSize: Self.contentSize,
+            query: highlightQuery
+        )
+            .font(contentFont)
+            .tracking(contentTracking)
+            .italic(shouldItalic)
+            .foregroundStyle(theme.textPrimary(for: colorScheme))
+            .lineSpacing(theme.lineSpacing)
             .strikethrough(entry.taskState == .cancelled)
     }
 
@@ -287,8 +306,8 @@ struct StreamEntryRow: View {
     private var trailingLabel: some View {
         if isHovering && isRescuable {
             Text("↑ rescue")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(Theme.event.opacity(0.7))
+                .font(theme.monoFont(size: 9))
+                .foregroundStyle(theme.accent.opacity(0.7))
                 .fixedSize()
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -296,57 +315,27 @@ struct StreamEntryRow: View {
                 ))
         } else if let time = timeLabel {
             Text(time)
-                .font(Self.timeFont)
-                .foregroundStyle(.tertiary)
+                .font(timeFont)
+                .foregroundStyle(theme.timestampColor(for: colorScheme))
                 .fixedSize()
                 .transition(.opacity)
         }
     }
 
-    private var glyphColor: Color {
-        switch entry.bulletType {
-        case .idea: return Theme.idea
-        case .task:
-            switch entry.taskState {
-            case .done: return Theme.taskDone
-            case .cancelled: return .secondary
-            case .migrated: return Theme.event
-            default: return .primary
-            }
-        case .event: return Theme.event
-        case .note: return .primary
-        case .unknown: return .secondary
-        }
-    }
-
-    /// Cached formatter for short time labels ("3pm"). Created once to
-    /// avoid allocating on every SwiftUI body evaluation.
+    /// Cached formatter for absolute 24h time labels ("15:42"). Created
+    /// once to avoid allocating on every SwiftUI body evaluation.
     private static let shortTimeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "ha"
+        f.dateFormat = "HH:mm"
         return f
     }()
 
     private var timeLabel: String? {
         guard let timestamp = entry.timestamp else { return nil }
-        // Gravity-aware time labels from architecture doc:
-        // Today: relative ("now" / "2m" / "3h")
-        // 1-3 days: "11pm" / "3pm"
-        // 4+ days: omitted
-        let days = entry.ageInDays
-
-        if days == 0 {
-            let seconds = Int(Date().timeIntervalSince(timestamp))
-            if seconds < 60 { return "now" }
-            let minutes = seconds / 60
-            if minutes < 60 { return "\(minutes)m" }
-            let hours = minutes / 60
-            return "\(hours)h"
-        } else if days <= 3 {
-            return Self.shortTimeFormatter.string(from: timestamp).lowercased()
-        }
-        // 4+ days: omit timestamp per gravity decay spec.
-        return nil
+        // Unified 24h absolute time across all ages — the day separator
+        // above each section already carries the date, so "15:42" is
+        // enough context on its own.
+        return Self.shortTimeFormatter.string(from: timestamp)
     }
 }

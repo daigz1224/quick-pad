@@ -5,37 +5,86 @@ import SwiftUI
 /// `.inlineOnlyPreservingWhitespace` so block-level elements (headers,
 /// lists) are treated as plain text.
 ///
-/// Search highlighting is applied on top of Markdown styling: matching
-/// substrings get a yellow foreground + bold, preserving any underlying
-/// code/link styling.
+/// Two overloads:
+/// - `render(_:query:)` — plain rendering, search highlight uses yellow.
+///   Kept for tests and any caller without theme access.
+/// - `render(_:theme:scheme:query:)` — theme-aware rendering: code spans
+///   take the theme accent + tinted surface, links take the theme accent
+///   with underline, search highlight tints with theme accent.
 enum InlineMarkdown {
 
-    /// Render `text` as inline Markdown, optionally highlighting
-    /// `query` matches with yellow + bold.
+    // MARK: - Plain (no theme)
+
     static func render(_ text: String, query: String = "") -> Text {
-        // Try Markdown parsing; fall back to plain text on failure.
         guard var attributed = try? AttributedString(
             markdown: text,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         ) else {
-            return highlightPlain(text, query: query)
+            return highlightPlain(text, query: query, accent: .yellow)
         }
-
-        // Apply search highlighting if active.
         if !query.isEmpty {
-            applySearchHighlight(&attributed, query: query)
+            applySearchHighlight(&attributed, query: query, color: .yellow)
         }
-
         return Text(attributed)
     }
 
-    // MARK: - Search highlighting on AttributedString
+    // MARK: - Themed
 
-    /// Walk the attributed string's plain-text representation and mark
-    /// every case-insensitive match of `query` with yellow + bold.
+    @MainActor
+    static func render(
+        _ text: String,
+        theme: ThemeManager,
+        scheme: ColorScheme,
+        contentSize: CGFloat = 11,
+        query: String = ""
+    ) -> Text {
+        guard var attributed = try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) else {
+            return highlightPlain(text, query: query, accent: theme.accent)
+        }
+
+        applyThemeStyling(&attributed, theme: theme, scheme: scheme, contentSize: contentSize)
+
+        if !query.isEmpty {
+            applySearchHighlight(&attributed, query: query, color: theme.accent)
+        }
+        return Text(attributed)
+    }
+
+    // MARK: - Run styling
+
+    @MainActor
+    private static func applyThemeStyling(
+        _ attributed: inout AttributedString,
+        theme: ThemeManager,
+        scheme: ColorScheme,
+        contentSize: CGFloat
+    ) {
+        let codeFont = theme.monoFont(size: contentSize)
+        let codeBg = theme.accent.opacity(scheme == .dark ? 0.18 : 0.12)
+        let codeFg = theme.accent
+
+        for run in attributed.runs {
+            if let intent = run.inlinePresentationIntent, intent.contains(.code) {
+                attributed[run.range].foregroundColor = codeFg
+                attributed[run.range].backgroundColor = codeBg
+                attributed[run.range].font = codeFont
+            }
+            if run.link != nil {
+                attributed[run.range].foregroundColor = theme.accent
+                attributed[run.range].underlineStyle = .single
+            }
+        }
+    }
+
+    // MARK: - Search highlighting
+
     private static func applySearchHighlight(
         _ attributed: inout AttributedString,
-        query: String
+        query: String,
+        color: Color
     ) {
         let plain = String(attributed.characters)
         var searchStart = plain.startIndex
@@ -45,7 +94,6 @@ enum InlineMarkdown {
                 options: .caseInsensitive,
                 range: searchStart..<plain.endIndex
               ) {
-            // Convert String.Index range to AttributedString.Index range.
             let offset = plain.distance(from: plain.startIndex, to: range.lowerBound)
             let length = plain.distance(from: range.lowerBound, to: range.upperBound)
             let attrStart = attributed.index(
@@ -58,18 +106,23 @@ enum InlineMarkdown {
             )
             let attrRange = attrStart..<attrEnd
 
-            attributed[attrRange].foregroundColor = .yellow
-            attributed[attrRange].inlinePresentationIntent = .stronglyEmphasized
+            // For themed mode (color != .yellow) use a soft background
+            // tint so we don't fight code-span foreground colors.
+            if color == .yellow {
+                attributed[attrRange].foregroundColor = .yellow
+                attributed[attrRange].inlinePresentationIntent = .stronglyEmphasized
+            } else {
+                attributed[attrRange].backgroundColor = color.opacity(0.30)
+                attributed[attrRange].inlinePresentationIntent = .stronglyEmphasized
+            }
 
             searchStart = range.upperBound
         }
     }
 
-    // MARK: - Fallback plain-text highlighting
+    // MARK: - Plain-text fallback
 
-    /// Used when Markdown parsing fails — mirrors the old `highlighted`
-    /// method from `StreamEntryRow`.
-    private static func highlightPlain(_ text: String, query: String) -> Text {
+    private static func highlightPlain(_ text: String, query: String, accent: Color) -> Text {
         guard !query.isEmpty else { return Text(text) }
 
         var result = Text("")
@@ -84,7 +137,7 @@ enum InlineMarkdown {
                 result = result + Text(String(text[cursor..<range.lowerBound]))
             }
             result = result + Text(String(text[range]))
-                .foregroundStyle(Color.yellow)
+                .foregroundStyle(accent)
                 .bold()
             cursor = range.upperBound
         }

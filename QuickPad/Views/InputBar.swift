@@ -8,6 +8,7 @@ import SwiftUI
 /// bullet selection. All disk writes go through `StreamViewModel.append`.
 struct InputBar: View {
     @Environment(StreamViewModel.self) private var viewModel
+    @Environment(ThemeManager.self) private var theme
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var draft: String = ""
@@ -15,7 +16,7 @@ struct InputBar: View {
     @State private var bulletBounce: Bool = false
     @FocusState private var isFocused: Bool
 
-    private static let font = Font.system(size: 12, design: .monospaced)
+    private var font: Font { theme.uiFont(size: 12) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -23,19 +24,19 @@ struct InputBar: View {
 
             TextField(placeholder, text: $draft)
                 .textFieldStyle(.plain)
-                .font(Self.font)
-                .tracking(-0.3)
+                .font(font)
+                .tracking(theme.contentTracking)
                 .focused($isFocused)
                 .onSubmit(submit)
                 .submitLabel(.send)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Theme.surface(for: colorScheme))
+        .background(theme.surface(for: colorScheme))
         .overlay(alignment: .bottom) {
             // Focus accent line — visible when typing.
             Rectangle()
-                .fill(isFocused ? Theme.event.opacity(0.3) : Color.secondary.opacity(0.1))
+                .fill(isFocused ? theme.accent.opacity(0.3) : Color.secondary.opacity(0.1))
                 .frame(height: isFocused ? 1.5 : 0.5)
                 .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
@@ -60,9 +61,9 @@ struct InputBar: View {
             }
         } label: {
             Text(bulletType.glyph)
-                .font(Self.font)
-                .tracking(-0.3)
-                .foregroundStyle(glyphColor)
+                .font(font)
+                .tracking(theme.contentTracking)
+                .foregroundStyle(bulletType.glyphColor(theme: theme, scheme: colorScheme))
                 .frame(width: 18, height: 18)
                 .scaleEffect(bulletBounce ? 1.25 : 1.0)
                 .rotationEffect(.degrees(bulletBounce ? -15 : 0))
@@ -73,25 +74,7 @@ struct InputBar: View {
         .help("\(bulletType.label) — click to cycle")
     }
 
-    private var glyphColor: Color {
-        switch bulletType {
-        case .idea: return Theme.idea
-        case .task: return .primary
-        case .event: return Theme.event
-        case .note: return .primary
-        case .unknown: return .secondary
-        }
-    }
-
-    private var placeholder: String {
-        switch bulletType {
-        case .note: return "note — what's on your mind?"
-        case .task: return "task — what needs doing?"
-        case .event: return "event — what happened?"
-        case .idea: return "idea — capture the spark"
-        case .unknown: return "…"
-        }
-    }
+    private var placeholder: String { bulletType.placeholder }
 
     private func submit() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)

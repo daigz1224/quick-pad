@@ -4,26 +4,33 @@ A macOS 14+ menu bar app for rapid logging — fusing Karpathy's
 append-and-review single stream, Bullet Journal rapid logging symbols,
 and Raycast Notes' floating menu-bar experience.
 
-See `docs/ARCHITECTURE.md` for the full design rationale.
+See `docs/ARCHITECTURE.md` for the full design rationale, `CHANGELOG.md` for
+recent changes, and `ROADMAP.md` for plans.
 
 ## Features
 
 - **Menu bar popover** — click the icon or press **⌥N** anywhere to toggle
+- **Dynamic Island widget** — right-click the menu bar icon → **Show Island** for an always-visible pill that shows the latest entry; hover to expand, click to dismiss
 - **Floating window** — detach with **⌘D** for always-on-top note taking
-- **Rapid input** — Enter to append, Tab to cycle bullet type (note → task → event → idea)
+- **Rapid input** — Enter to append, Tab to cycle bullet type (note → task → question → idea)
 - **Gravity decay** — older entries fade in opacity; day separators decay from "TODAY" → "YESTERDAY" → "APR 6 · SUN" → "MAR 20"
 - **Rescue** — hover old entries and click to float them back to today; undo with **⌘Z**
 - **Task state** — click task glyph to toggle done/pending; right-click for migrated/cancelled
+- **Change bullet type** — right-click → Bullet Type to re-classify an existing entry
 - **In-place edit** — right-click → Edit to fix typos without breaking timestamp
 - **Soft delete + undo** — right-click → Delete with 5-second undo window
 - **Inline Markdown** — `` `code` ``, **bold**, `[links](url)` render natively
 - **Search** — **⌘F** full-text search with match highlighting
-- **Type filter** — **⌘1-4** to filter by note/task/event/idea, **⌘5** to clear
+- **Type filter** — **⌘1-4** to filter by note/task/question/idea, **⌘5** to clear
 - **Export** — **⌘E** exports visible entries as Markdown via save dialog
+- **Shortcut hints** — **⌘/** toggles an overlay listing every shortcut
 - **Auto-archive** — done/cancelled tasks older than 30 days move to `~/.quickpad/archive/YYYY-MM.md`
 - **Live sync** — external edits (vim, `echo >>`) reflect automatically via FSEvents
-- **Appearance** — Auto / Light / Dark cycling
+- **Appearance** — Auto / Light / Dark cycling (menu bar right-click → Appearance)
 - **Pin** — keep popover open while working elsewhere
+- **Polished visuals** — themed inline Markdown (code/links pick up the
+  accent), accent-tinted timestamps, fade dividers, CJK/Latin density
+  tuning
 
 ## Install
 
@@ -58,11 +65,13 @@ The built app is at `~/Library/Developer/Xcode/DerivedData/QuickPad-*/Build/Prod
 | **⌘D** | Detach / reattach floating window |
 | **⌘E** | Export visible entries as Markdown |
 | **⌘Z** | Undo delete or rescue |
-| **⌘1-4** | Filter by type (note/task/event/idea) |
+| **⌘1-4** | Filter by type (note/task/question/idea) |
 | **⌘5** | Clear filter |
-| **Right-click entry** | Edit, Delete, Rescue, change task state |
+| **⌘/** | Toggle shortcut hints overlay |
+| **Right-click entry** | Edit, Delete, Rescue, change task state, change Bullet Type |
 | **Click task glyph** | Toggle pending ↔ done |
 | **Hover old entry** | Shows "↑ rescue" hint (click to rescue) |
+| **Right-click menu bar icon** | Show/Hide Island, Quit |
 
 Content shortcut: typing `* foo` writes `*priority foo` (red left border).
 
@@ -92,11 +101,11 @@ concurrent vim edits.
 
 - 2026-04-10T22:00:00+08:00 [task>done] shipped a thing
 - 2026-04-10T15:00:00+08:00 [task>migrated] punted to next week
-- 2026-04-10T14:00:00+08:00 [event] architecture review meeting
+- 2026-04-10T14:00:00+08:00 [question] why is p99 flat after the cache warm-up?
 - 2026-04-10T10:00:00+08:00 [idea] cool idea
 ```
 
-- **Bullet types**: `note`, `task`, `event`, `idea`
+- **Bullet types**: `note`, `task`, `question`, `idea` (the legacy `event` token still parses as `question`)
 - **Task states**: `task>done`, `task>migrated`, `task>cancelled`
 - **Soft delete**: `[note>deleted]` — hidden from UI, cleaned after 30 days
 - **Ordering**: newest day at top, newest entry first within each day

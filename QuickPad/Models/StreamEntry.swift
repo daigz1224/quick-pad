@@ -38,10 +38,11 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         self.rawLine = rawLine
     }
 
-    /// Glyph to render in the fixed-width column. Tasks override the
-    /// default bullet glyph based on their state.
+    /// Glyph to render in the fixed-width column. Non-pending task
+    /// states (done/cancelled/migrated) use semantic glyphs (✓ ✕ ▶);
+    /// everything else falls back to the bullet type's glyph.
     var displayGlyph: String {
-        if bulletType == .task, let state = taskState {
+        if bulletType == .task, let state = taskState, state != .pending {
             return state.glyph
         }
         return bulletType.glyph

@@ -13,6 +13,9 @@ struct DaySeparatorView: View {
     let date: Date?
     let rawHeader: String?
 
+    @Environment(ThemeManager.self) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 6) {
             line
@@ -25,16 +28,16 @@ struct DaySeparatorView: View {
     @ViewBuilder
     private var labelView: some View {
         let text = Text(label)
-            .font(.system(size: 10, design: .monospaced))
+            .font(theme.uiFont(size: 10, weight: .medium))
             .tracking(0.3)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.textSecondary(for: colorScheme))
             .fixedSize()
 
         if isToday {
             text
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
-                .background(Theme.event.opacity(0.10), in: Capsule())
+                .background(theme.accent.opacity(0.10), in: Capsule())
         } else {
             text
         }
@@ -48,7 +51,7 @@ struct DaySeparatorView: View {
     private var line: some View {
         Rectangle()
             .fill(LinearGradient(
-                colors: [.clear, Color.secondary.opacity(0.2), .clear],
+                colors: [.clear, theme.divider(for: colorScheme), .clear],
                 startPoint: .leading, endPoint: .trailing
             ))
             .frame(height: 0.5)

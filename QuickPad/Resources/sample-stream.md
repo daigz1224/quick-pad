@@ -3,7 +3,7 @@
 - 2026-04-09T22:31+09:00 [idea] QuickPad 融合 BuJo rapid logging 是对的方向
 - 2026-04-09T20:15+09:00 [task] 和标注组对齐点云密度标准 — 300pts@50m
 - 2026-04-09T18:00+09:00 [note] *priority read: SplatAD appendix B
-- 2026-04-09T14:00+09:00 [event] architecture review meeting
+- 2026-04-09T14:00+09:00 [question] SplatAD 到底适不适合我们的场景？
 - 2026-04-09T10:30+09:00 [note] frozen ConvNeXt-T 比 finetune 快 3x
 
 --- 2026-04-08 Wednesday ---

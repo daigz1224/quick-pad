@@ -6,6 +6,7 @@ import SwiftUI
 /// The hosting NSPanel has a fixed frame — it never resizes.
 struct IslandView: View {
     @Environment(StreamViewModel.self) private var viewModel
+    @Environment(ThemeManager.self) private var theme
     @State private var isExpanded: Bool = false
     var onExpandChange: (Bool) -> Void = { _ in }
     var onDismiss: () -> Void
@@ -62,13 +63,6 @@ struct IslandView: View {
     private var totalEntryCount: Int {
         recentEntries.count
     }
-
-    // MARK: - Fonts
-
-    private static let contentFont = Font.system(size: 11)
-    private static let inputFont   = Font.system(size: 12, design: .monospaced)
-    private static let headerFont  = Font.system(size: 12, weight: .medium, design: .monospaced)
-    private static let timeFont    = Font.system(size: 10, design: .monospaced)
 
     // MARK: - Body
 
@@ -145,11 +139,11 @@ struct IslandView: View {
         Button { expand() } label: {
             HStack(spacing: 8) {
                 Image(systemName: "list.dash")
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(theme.accent.opacity(0.7))
                 Text(latestSummary)
-                    .font(Self.contentFont)
-                    .tracking(-0.15)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(theme.contentFont(size: 11))
+                    .tracking(theme.contentTracking)
+                    .foregroundStyle(theme.textPrimary(for: .dark))
                     .lineLimit(1)
             }
             .padding(.horizontal, 14)
@@ -166,15 +160,15 @@ struct IslandView: View {
             // Header
             HStack(spacing: 8) {
                 Image(systemName: "list.dash")
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(theme.accent.opacity(0.7))
                 Text("QuickPad")
-                    .font(Self.headerFont)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(theme.uiFont(size: 12, weight: .medium))
+                    .foregroundStyle(theme.textPrimary(for: .dark))
                 Spacer()
                 Button { collapse() } label: {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(theme.textTertiary(for: .dark))
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
@@ -183,32 +177,32 @@ struct IslandView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
-            Divider().overlay(Color.white.opacity(0.1))
+            Divider().overlay(theme.accent.opacity(0.25))
 
             // Input bar
             HStack(alignment: .center, spacing: 8) {
                 Button { cycleBullet() } label: {
                     Text(bulletType.glyph)
-                        .font(Self.inputFont)
-                        .tracking(-0.3)
-                        .foregroundStyle(glyphColor)
+                        .font(theme.uiFont(size: 12))
+                        .tracking(theme.contentTracking)
+                        .foregroundStyle(islandGlyphColor)
                         .frame(width: 18, height: 18)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
-                TextField(placeholder, text: $draft)
+                TextField(bulletType.placeholder, text: $draft)
                     .textFieldStyle(.plain)
-                    .font(Self.inputFont)
-                    .tracking(-0.3)
-                    .foregroundStyle(.white)
+                    .font(theme.uiFont(size: 12))
+                    .tracking(theme.contentTracking)
+                    .foregroundStyle(theme.textPrimary(for: .dark))
                     .focused($isInputFocused)
                     .onSubmit(appendEntry)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(alignment: .bottom) {
-                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                Rectangle().fill(theme.accent.opacity(0.20)).frame(height: 1)
             }
 
             // Entries
@@ -226,11 +220,11 @@ struct IslandView: View {
 
                 if let msg = toastMessage {
                     Text(msg)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .font(theme.monoFont(size: 10))
+                        .foregroundStyle(theme.textPrimary(for: .dark))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(.white.opacity(0.12)))
+                        .background(Capsule().fill(theme.accent.opacity(0.25)))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .padding(.bottom, 4)
                 }
@@ -280,24 +274,8 @@ struct IslandView: View {
 
     // MARK: - Input bar colors
 
-    private var glyphColor: Color {
-        switch bulletType {
-        case .idea: return Theme.idea
-        case .task: return .white.opacity(0.7)
-        case .event: return Theme.event
-        case .note: return .white.opacity(0.7)
-        case .unknown: return .white.opacity(0.3)
-        }
-    }
-
-    private var placeholder: String {
-        switch bulletType {
-        case .note: return "note — what's on your mind?"
-        case .task: return "task — what needs doing?"
-        case .event: return "event — what happened?"
-        case .idea: return "idea — capture the spark"
-        case .unknown: return "…"
-        }
+    private var islandGlyphColor: Color {
+        bulletType.glyphColor(theme: theme, scheme: .dark)
     }
 
     // MARK: - Actions
@@ -343,14 +321,18 @@ private struct IslandEntryRow: View {
     var onTaskStateChange: ((StreamEntry, TaskState) -> Void)?
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
 
+    @Environment(ThemeManager.self) private var theme
+
     @State private var isHovering = false
     @State private var isEditing = false
     @State private var editDraft = ""
     @State private var justToggled = false
     @FocusState private var isEditFocused: Bool
 
-    private static let contentFont = Font.system(size: 11)
-    private static let timeFont = Font.system(size: 10, design: .monospaced)
+    private static let contentSize: CGFloat = 11
+
+    private var contentFont: Font { theme.contentFont(size: Self.contentSize) }
+    private var contentTracking: CGFloat { theme.contentTracking }
 
     private var isRescuable: Bool {
         entry.ageInDays >= 1 && entry.bulletType != .unknown
@@ -363,21 +345,27 @@ private struct IslandEntryRow: View {
             if isEditing {
                 editField
             } else {
-                Text(entry.content)
-                    .font(Self.contentFont).tracking(-0.15)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineSpacing(1).lineLimit(2)
-                    .strikethrough(entry.taskState == .cancelled)
+                InlineMarkdown.render(
+                    entry.content,
+                    theme: theme,
+                    scheme: .dark,
+                    contentSize: Self.contentSize
+                )
+                .font(contentFont).tracking(contentTracking)
+                .italic(theme.ideaItalic && entry.bulletType == .idea)
+                .foregroundStyle(theme.textPrimary(for: .dark).opacity(0.92))
+                .lineSpacing(1).lineLimit(2)
+                .strikethrough(entry.taskState == .cancelled)
             }
 
             Spacer(minLength: 6)
             trailingLabel
-                .frame(width: 30, alignment: .trailing)
+                .frame(width: 36, alignment: .trailing)
         }
         .padding(.vertical, 1)
         .background(
             RoundedRectangle(cornerRadius: 5)
-                .fill(.white.opacity(isHovering ? 0.06 : 0))
+                .fill(theme.accent.opacity(isHovering ? 0.12 : 0))
         )
         .animation(.easeInOut(duration: 0.12), value: isHovering)
         .contentShape(Rectangle())
@@ -389,6 +377,10 @@ private struct IslandEntryRow: View {
     }
 
     // MARK: - Glyph
+
+    private var glyphColor: Color {
+        entry.bulletType.glyphColor(theme: theme, scheme: .dark, taskState: entry.taskState)
+    }
 
     private var glyphView: some View {
         Group {
@@ -402,8 +394,9 @@ private struct IslandEntryRow: View {
                     }
                 } label: {
                     Text(entry.displayGlyph)
-                        .font(Self.contentFont).tracking(-0.15)
+                        .font(contentFont).tracking(contentTracking)
                         .foregroundStyle(glyphColor)
+                        .lineLimit(1)
                         .frame(width: 12, alignment: .leading)
                         .scaleEffect(justToggled ? 1.2 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justToggled)
@@ -412,8 +405,9 @@ private struct IslandEntryRow: View {
                 .buttonStyle(.plain)
             } else {
                 Text(entry.displayGlyph)
-                    .font(Self.contentFont).tracking(-0.15)
+                    .font(contentFont).tracking(contentTracking)
                     .foregroundStyle(glyphColor)
+                    .lineLimit(1)
                     .frame(width: 12, alignment: .leading)
             }
         }
@@ -425,27 +419,27 @@ private struct IslandEntryRow: View {
         HStack(spacing: 4) {
             TextField("content", text: $editDraft)
                 .textFieldStyle(.plain)
-                .font(Self.contentFont).tracking(-0.15)
-                .foregroundStyle(.white)
+                .font(contentFont).tracking(contentTracking)
+                .foregroundStyle(theme.textPrimary(for: .dark))
                 .focused($isEditFocused)
                 .onSubmit(commitEdit)
                 .onExitCommand(perform: cancelEdit)
             Button { commitEdit() } label: {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(Theme.taskDone)
+                    .foregroundStyle(theme.taskDone)
             }
             .buttonStyle(.plain)
             Button { cancelEdit() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(theme.textTertiary(for: .dark))
             }
             .buttonStyle(.plain)
         }
         .padding(.vertical, 1)
         .padding(.horizontal, 4)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+        .background(theme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
     }
 
     private func beginEditing() {
@@ -474,12 +468,12 @@ private struct IslandEntryRow: View {
     private var trailingLabel: some View {
         if isHovering && isRescuable {
             Text("↑")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(Theme.event.opacity(0.7))
+                .font(theme.monoFont(size: 9))
+                .foregroundStyle(theme.accent.opacity(0.85))
                 .fixedSize()
         } else if let t = timeLabel {
-            Text(t).font(Self.timeFont)
-                .foregroundStyle(.white.opacity(0.35)).fixedSize()
+            Text(t).font(theme.monoFont(size: 10))
+                .foregroundStyle(theme.timestampColor(for: .dark)).fixedSize()
         }
     }
 
@@ -517,7 +511,7 @@ private struct IslandEntryRow: View {
     @ViewBuilder
     private var bulletTypeMenu: some View {
         Menu {
-            ForEach([BulletType.note, .task, .event, .idea], id: \.self) { type in
+            ForEach([BulletType.note, .task, .question, .idea], id: \.self) { type in
                 Button {
                     onBulletTypeChange?(entry, type)
                 } label: {
@@ -560,41 +554,16 @@ private struct IslandEntryRow: View {
         }
     }
 
-    // MARK: - Colors & time
-
-    private var glyphColor: Color {
-        switch entry.bulletType {
-        case .idea: return Theme.idea
-        case .task:
-            switch entry.taskState {
-            case .done: return Theme.taskDone
-            case .cancelled: return .white.opacity(0.3)
-            case .migrated: return Theme.event
-            default: return .white.opacity(0.7)
-            }
-        case .event: return Theme.event
-        case .note: return .white.opacity(0.7)
-        case .unknown: return .white.opacity(0.3)
-        }
-    }
+    // MARK: - Time
 
     private static let shortTimeFmt: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "ha"; return f
+        f.dateFormat = "HH:mm"; return f
     }()
 
     private var timeLabel: String? {
         guard let ts = entry.timestamp else { return nil }
-        let days = entry.ageInDays
-        if days == 0 {
-            let s = Int(Date().timeIntervalSince(ts))
-            if s < 60 { return "now" }
-            let m = s / 60; if m < 60 { return "\(m)m" }
-            return "\(m / 60)h"
-        } else if days <= 3 {
-            return Self.shortTimeFmt.string(from: ts).lowercased()
-        }
-        return nil
+        return Self.shortTimeFmt.string(from: ts)
     }
 }

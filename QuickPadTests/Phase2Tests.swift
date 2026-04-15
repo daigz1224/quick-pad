@@ -157,8 +157,9 @@ final class Phase2Tests: XCTestCase {
         XCTAssertEqual(result, line, "Non-task lines should be unchanged")
     }
 
-    func testReplaceTaskStateIgnoresEvent() {
-        let line = "- 2026-04-09T22:31:17+09:00 [event] a meeting"
+    func testReplaceTaskStateIgnoresQuestion() {
+        // Non-task bullets should never get a task-state suffix attached.
+        let line = "- 2026-04-09T22:31:17+09:00 [question] still wondering"
         let result = StreamMutator.replaceTaskState(rawLine: line, newState: .done)
         XCTAssertEqual(result, line)
     }

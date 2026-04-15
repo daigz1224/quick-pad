@@ -6,7 +6,8 @@ import SwiftUI
 struct PopoverRootView: View {
     @Environment(StreamViewModel.self) private var viewModel
     @Environment(PopoverController.self) private var popoverController
-    @Environment(\.colorScheme) private var systemColorScheme
+    @Environment(ThemeManager.self) private var theme
+    @State private var systemAppearance = SystemAppearance.shared
 
     @AppStorage("appearanceMode") private var appearanceRaw: String = AppearanceMode.auto.rawValue
 
@@ -27,23 +28,21 @@ struct PopoverRootView: View {
     /// Keyboard shortcut hints overlay.
     @State private var showShortcutHints: Bool = false
 
-    /// Palette refresh trigger — bumped when palette cycles.
-    @State private var paletteRefresh: Int = UserDefaults.standard.integer(forKey: "accentPalette")
 
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
     }
 
-    private var isDark: Bool {
+    private var effectiveScheme: ColorScheme {
         switch appearance {
-        case .light: return false
-        case .dark: return true
-        case .auto: return systemColorScheme == .dark
+        case .light: return .light
+        case .dark: return .dark
+        case .auto: return systemAppearance.scheme
         }
     }
 
     private var backgroundColor: Color {
-        Theme.background(isDark: isDark)
+        theme.background(for: effectiveScheme)
     }
 
     var body: some View {
@@ -52,7 +51,7 @@ struct PopoverRootView: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 header
-                Theme.fadeDivider
+                ThemeFadeDivider()
                 if isSearching {
                     SearchBar(query: $searchQuery, onDismiss: dismissSearch)
                 } else {
@@ -114,7 +113,7 @@ struct PopoverRootView: View {
         }
         .frame(width: 420, height: 520)
         .background(backgroundColor)
-        .preferredColorScheme(appearance.colorScheme)
+        .preferredColorScheme(effectiveScheme)
         .textSelection(.disabled)
         .focusEffectDisabled()
         .background {
@@ -131,7 +130,7 @@ struct PopoverRootView: View {
                     .keyboardShortcut("1", modifiers: .command)
                 Button("FilterTask") { toggleFilter(.task) }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("FilterEvent") { toggleFilter(.event) }
+                Button("FilterQuestion") { toggleFilter(.question) }
                     .keyboardShortcut("3", modifiers: .command)
                 Button("FilterIdea") { toggleFilter(.idea) }
                     .keyboardShortcut("4", modifiers: .command)
@@ -174,38 +173,28 @@ struct PopoverRootView: View {
     private func filterBar(_ filter: BulletType) -> some View {
         HStack(spacing: 6) {
             Text(filter.glyph)
-                .font(.system(size: 10))
-                .foregroundStyle(filterGlyphColor(filter))
+                .font(theme.monoFont(size: 10))
+                .foregroundStyle(filter.glyphColor(theme: theme, scheme: effectiveScheme))
             Text("Showing: \(filter.label)")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(theme.monoFont(size: 10))
+                .foregroundStyle(theme.textSecondary(for: effectiveScheme))
             Spacer()
             Button {
                 typeFilter = nil
             } label: {
                 Text("⌘5 clear")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(Theme.event.opacity(0.7))
+                    .font(theme.monoFont(size: 9))
+                    .foregroundStyle(theme.accent.opacity(0.7))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
-        .background(Theme.surface(isDark: isDark).opacity(0.6))
+        .background(theme.accent.opacity(0.10))
         .overlay(alignment: .bottom) {
-            Theme.fadeDivider
+            ThemeFadeDivider()
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    private func filterGlyphColor(_ type: BulletType) -> Color {
-        switch type {
-        case .idea: return Theme.idea
-        case .task: return .primary
-        case .event: return Theme.event
-        case .note: return .primary
-        case .unknown: return .secondary
-        }
     }
 
     // MARK: - Search helpers
@@ -253,7 +242,7 @@ struct PopoverRootView: View {
     // MARK: - Undo toast
 
     private var undoToast: some View {
-        toastPill(icon: "trash", iconColor: Theme.priority.opacity(0.8), message: "Deleted", onAction: performUndo)
+        toastPill(icon: "trash", iconColor: theme.priority.opacity(0.8), message: "Deleted", onAction: performUndo)
     }
 
     private func performUndo() {
@@ -279,7 +268,7 @@ struct PopoverRootView: View {
     // MARK: - Rescue toast
 
     private func rescueToastView(_ message: String) -> some View {
-        toastPill(icon: "arrow.up.to.line", iconColor: Theme.event, message: message, onAction: performUndoRescue)
+        toastPill(icon: "arrow.up.to.line", iconColor: theme.accent, message: message, onAction: performUndoRescue)
     }
 
     private func toastPill(icon: String, iconColor: Color, message: String, onAction: @escaping () -> Void) -> some View {
@@ -288,13 +277,13 @@ struct PopoverRootView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(iconColor)
             Text(message)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.primary)
+                .font(theme.monoFont(size: 11))
+                .foregroundStyle(theme.textPrimary(for: effectiveScheme))
             Spacer()
             Button(action: onAction) {
                 Text("Undo ⌘Z")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Theme.event)
+                    .font(theme.monoFont(size: 11, weight: .medium))
+                    .foregroundStyle(theme.accent)
             }
             .buttonStyle(Theme.SubtleButton())
         }
@@ -339,11 +328,11 @@ struct PopoverRootView: View {
             Image(systemName: "list.dash")
                 .foregroundStyle(.secondary)
             Text("QuickPad")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(.primary)
+                .font(theme.uiFont(size: 12, weight: .medium))
+                .foregroundStyle(theme.textPrimary(for: effectiveScheme))
             if viewModel.isShowingSample {
                 Text("sample")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(theme.monoFont(size: 9))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(Color.secondary.opacity(0.15), in: Capsule())
@@ -352,7 +341,6 @@ struct PopoverRootView: View {
             Spacer()
 
             exportButton
-            paletteButton
             appearanceButton
             detachButton
             if !popoverController.isDetached {
@@ -375,25 +363,6 @@ struct PopoverRootView: View {
         }
         .buttonStyle(Theme.SubtleButton())
         .help("Export visible entries (⌘E)")
-    }
-
-    private var paletteButton: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                Theme.cyclePalette()
-                paletteRefresh = UserDefaults.standard.integer(forKey: "accentPalette")
-            }
-        } label: {
-            // Show a small colored dot indicating the current palette's event color
-            Circle()
-                .fill(Theme.event)
-                .frame(width: 8, height: 8)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .id(paletteRefresh) // force re-render
-        }
-        .buttonStyle(Theme.SubtleButton())
-        .help("Accent palette: \(Theme.currentPalette.name) — click to cycle")
     }
 
     private var appearanceButton: some View {

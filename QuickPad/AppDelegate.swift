@@ -1,12 +1,14 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let viewModel = StreamViewModel()
     private let popoverController = PopoverController()
+    private let themeManager = ThemeManager.shared
     private let hotkeyManager = HotkeyManager()
     private let fileWatcher = StreamFileWatcher()
     private var eventMonitor: Any?
@@ -66,7 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
+        let isRightClick = event?.type == .rightMouseUp
+        let isOptionLeftClick = event?.type == .leftMouseUp
+            && event?.modifierFlags.contains(.option) == true
+
+        if isRightClick || isOptionLeftClick {
             showContextMenu(from: sender)
         } else {
             // If floating panel is open, bring it to front instead.
@@ -88,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         )
         menu.addItem(islandItem)
+
         menu.addItem(.separator())
 
         menu.addItem(
@@ -113,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: PopoverRootView()
                 .environment(viewModel)
                 .environment(popoverController)
+                .environment(themeManager)
         )
         popoverController.popover = popover
     }
@@ -161,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: PopoverRootView()
                 .environment(viewModel)
                 .environment(popoverController)
+                .environment(themeManager)
         )
         panel.contentViewController = hostingView
 
@@ -215,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     notchHeight: panel.notchHeight
                 )
                 .environment(viewModel)
+                .environment(themeManager)
             )
 
             // Hit-test: only the visible pill area below the notch zone.

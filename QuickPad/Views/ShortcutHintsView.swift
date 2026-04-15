@@ -5,6 +5,8 @@ import SwiftUI
 struct ShortcutHintsView: View {
     var onDismiss: () -> Void
 
+    @Environment(ThemeManager.self) private var theme
+
     private static let sections: [(title: String, shortcuts: [(key: String, label: String)])] = [
         ("Navigation", [
             ("⌥N", "Toggle popover"),
@@ -24,7 +26,7 @@ struct ShortcutHintsView: View {
         ("Filters", [
             ("⌘1", "Notes only"),
             ("⌘2", "Tasks only"),
-            ("⌘3", "Events only"),
+            ("⌘3", "Questions only"),
             ("⌘4", "Ideas only"),
             ("⌘5", "Clear filter"),
         ]),
@@ -37,29 +39,29 @@ struct ShortcutHintsView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Keyboard Shortcuts")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(theme.monoFont(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
                 Text("⌘/ to dismiss")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(theme.monoFont(size: 9))
                     .foregroundStyle(.tertiary)
             }
 
             ForEach(Self.sections, id: \.title) { section in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(section.title.uppercased())
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(theme.monoFont(size: 9, weight: .medium))
                         .foregroundStyle(.tertiary)
                         .tracking(0.5)
 
                     ForEach(section.shortcuts, id: \.key) { shortcut in
                         HStack(spacing: 0) {
                             Text(shortcut.key)
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Theme.event)
+                                .font(theme.monoFont(size: 11, weight: .medium))
+                                .foregroundStyle(theme.accent)
                                 .frame(width: 52, alignment: .leading)
                             Text(shortcut.label)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(theme.monoFont(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                     }

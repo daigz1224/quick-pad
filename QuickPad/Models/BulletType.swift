@@ -3,7 +3,7 @@ import Foundation
 enum BulletType: String, Codable, Hashable, CaseIterable {
     case note
     case task
-    case event
+    case question
     case idea
     case unknown
 
@@ -12,18 +12,21 @@ enum BulletType: String, Codable, Hashable, CaseIterable {
         switch self {
         case .note: return "—"
         case .task: return "☐"
-        case .event: return "○"
+        case .question: return "?"
         case .idea: return "!"
-        case .unknown: return "?"
+        case .unknown: return "⋯"
         }
     }
 
     /// Parse the bracketed token from a stream entry. Accepts the bare type
     /// (`task`) or a type with a task-state suffix (`task>done`).
+    /// `event` is accepted as a legacy alias for `question` so streams
+    /// written before the rename continue to load without a migration pass.
     /// Returns nil for tokens we do not recognise so callers can fall back
     /// to `.unknown`.
     static func parse(token: String) -> BulletType? {
         let head = token.split(separator: ">", maxSplits: 1).first.map(String.init) ?? token
+        if head == "event" { return .question }
         return BulletType(rawValue: head)
     }
 
@@ -34,8 +37,8 @@ enum BulletType: String, Codable, Hashable, CaseIterable {
     var next: BulletType {
         switch self {
         case .note: return .task
-        case .task: return .event
-        case .event: return .idea
+        case .task: return .question
+        case .question: return .idea
         case .idea: return .note
         case .unknown: return .note
         }
@@ -46,7 +49,7 @@ enum BulletType: String, Codable, Hashable, CaseIterable {
         switch self {
         case .note: return "note"
         case .task: return "task"
-        case .event: return "event"
+        case .question: return "question"
         case .idea: return "idea"
         case .unknown: return "unknown"
         }
