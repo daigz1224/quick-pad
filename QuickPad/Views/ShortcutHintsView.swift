@@ -23,6 +23,7 @@ struct ShortcutHintsView: View {
             ("⌘R", "Review mode (cards from N days ago)"),
             ("⌘Z", "Undo delete / rescue"),
             ("⌘E", "Export visible entries"),
+            ("⌘⇧E", "Export with date range"),
             ("RC", "Right-click row → Graduate"),
         ]),
         ("Review mode", [

@@ -10,6 +10,7 @@ struct PopoverRootView: View {
     @State private var systemAppearance = SystemAppearance.shared
 
     @AppStorage("appearanceMode") private var appearanceRaw: String = AppearanceMode.auto.rawValue
+    // Default on so filtering is discoverable without learning ⌘1-5.
     @AppStorage("showHintBar") private var showHintBar: Bool = true
     @AppStorage("showStatsBar") private var showStatsBar: Bool = true
 
@@ -40,6 +41,10 @@ struct PopoverRootView: View {
     /// Review mode overlay (⌘R).
     @State private var showReview: Bool = false
 
+    /// ⌘⇧E ranged-export sheet. ⌘E remains "export everything visible";
+    /// ⌘⇧E adds the time-window picker without changing the muscle memory.
+    @State private var showExportSheet: Bool = false
+
 
     private var appearance: AppearanceMode {
         AppearanceMode(rawValue: appearanceRaw) ?? .auto
@@ -65,7 +70,7 @@ struct PopoverRootView: View {
                 header
                 ThemeFadeDivider()
                 if showStatsBar && !viewModel.sections.isEmpty && !isSearching {
-                    StreamStatsBar(sections: viewModel.sections)
+                    StreamStatsBar()
                         .transition(.opacity)
                 }
                 if isSearching {
@@ -73,14 +78,9 @@ struct PopoverRootView: View {
                 } else {
                     InputBar()
                     if showHintBar {
-                        HintBar()
+                        HintBar(typeFilter: $typeFilter)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                }
-
-                // Type filter indicator
-                if let filter = typeFilter {
-                    filterBar(filter)
                 }
 
                 StreamListView(
@@ -107,8 +107,7 @@ struct PopoverRootView: View {
                     onGraduate: { entry in
                         viewModel.graduateEntry(entry)
                         showGraduateToast()
-                    },
-                    typeFilter: typeFilter
+                    }
                 )
             }
 
@@ -180,6 +179,10 @@ struct PopoverRootView: View {
                 Button("Export") { StreamExporter.savePanel(sections: filteredSections) }
                     .keyboardShortcut("e", modifiers: .command)
 
+                // ⌘⇧E ranged export
+                Button("ExportRange") { showExportSheet = true }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+
                 // ⌘D detach/reattach
                 Button("Detach") { popoverController.onDetachToggle?() }
                     .keyboardShortcut("d", modifiers: .command)
@@ -197,6 +200,15 @@ struct PopoverRootView: View {
             .accessibilityHidden(true)
         }
         .onAppear { viewModel.load() }
+        .sheet(isPresented: $showExportSheet) {
+            ExportRangeSheet { interval in
+                StreamExporter.savePanel(
+                    sections: filteredSections,
+                    dateInterval: interval
+                )
+            }
+            .environment(theme)
+        }
         .animation(.easeInOut(duration: 0.2), value: viewModel.undoEntry != nil)
         .animation(.easeInOut(duration: 0.2), value: rescueToast != nil)
         .animation(.easeInOut(duration: 0.2), value: graduateToast != nil)
@@ -217,39 +229,15 @@ struct PopoverRootView: View {
         }
     }
 
-    private func filterBar(_ filter: BulletType) -> some View {
-        HStack(spacing: 6) {
-            Text(filter.glyph)
-                .font(theme.monoFont(size: 10))
-                .foregroundStyle(filter.glyphColor(theme: theme, scheme: effectiveScheme))
-            Text("Showing: \(filter.label)")
-                .font(theme.monoFont(size: 10))
-                .foregroundStyle(theme.textSecondary(for: effectiveScheme))
-            Spacer()
-            Button {
-                typeFilter = nil
-            } label: {
-                Text("⌘5 clear")
-                    .font(theme.monoFont(size: 9))
-                    .foregroundStyle(theme.accent.opacity(0.7))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(theme.accent.opacity(0.10))
-        .overlay(alignment: .bottom) {
-            ThemeFadeDivider()
-        }
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
     // MARK: - Search helpers
 
     private var filteredSections: [StreamSection] {
+        // Hot path: no search active. Use the cached visibility filter
+        // on the view model so this doesn't recompute on every render.
         guard isSearching, !searchQuery.isEmpty else {
-            return viewModel.sections
+            return viewModel.visibleSections(typeFilter: typeFilter)
         }
+
         let needle = searchQuery.lowercased()
         var results = viewModel.sections.compactMap { section -> StreamSection? in
             let hits = section.entries.filter { matches($0, needle: needle) }
@@ -262,6 +250,8 @@ struct PopoverRootView: View {
         // Extend the search into ~/.quickpad/archive/*.md so months-old
         // entries remain findable. Hits go into a single synthetic
         // "FROM ARCHIVE" section appended to the end of the result list.
+        // `loadArchives` itself is cached (signature-keyed) so repeated
+        // keystrokes don't re-parse the archive on disk.
         let archiveHits = MarkdownFileStore()
             .loadArchives()
             .flatMap { $0.entries }
@@ -275,7 +265,10 @@ struct PopoverRootView: View {
                 isReadOnly: true
             ))
         }
-        return results
+        // Search results still need the soft-delete + type-filter pass
+        // before rendering. Uncached because the input changes per
+        // keystroke and the result set is small.
+        return StreamViewModel.applyVisibilityFilter(results, typeFilter: typeFilter)
     }
 
     private func matches(_ entry: StreamEntry, needle: String) -> Bool {

@@ -13,7 +13,7 @@ struct ReviewMode: View {
 
     let onClose: () -> Void
 
-    @State private var window: StreamViewModel.ReviewWindow = .sevenDays
+    @State private var window: StreamViewModel.ReviewWindow = .daysAgo(7)
     @State private var index: Int = 0
     /// Cached so a Rescue/Graduate that would silently rebuild
     /// `viewModel.sections` mid-session doesn't desync our cursor.
@@ -81,7 +81,7 @@ struct ReviewMode: View {
                 Button {
                     window = w
                 } label: {
-                    Text("\(w.rawValue)d")
+                    Text(w.shortLabel)
                         .font(theme.monoFont(size: 9))
                         .foregroundStyle(
                             w == window
@@ -105,6 +105,9 @@ struct ReviewMode: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .help(w == .staleTasks
+                      ? "Tasks pending for ≥\(StreamEntry.staleThresholdDays) days, oldest first"
+                      : "Entries from \(w.label)")
             }
         }
     }
@@ -133,10 +136,12 @@ struct ReviewMode: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "wind")
+            Image(systemName: window == .staleTasks ? "checkmark.seal" : "wind")
                 .font(.system(size: 32, weight: .ultraLight))
                 .foregroundStyle(theme.textTertiary(for: colorScheme))
-            Text("Nothing to review from \(window.rawValue) days ago")
+            Text(window == .staleTasks
+                 ? "No stale tasks — your queue is current"
+                 : "Nothing to review from \(window.label)")
                 .font(theme.monoFont(size: 11))
                 .foregroundStyle(theme.textSecondary(for: colorScheme))
             Text("Try a different window above")
@@ -151,7 +156,9 @@ struct ReviewMode: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 32, weight: .ultraLight))
                 .foregroundStyle(theme.accent)
-            Text("Reviewed \(pool.count) entries from \(window.rawValue) days ago")
+            Text(window == .staleTasks
+                 ? "Triaged \(pool.count) stale tasks"
+                 : "Reviewed \(pool.count) entries from \(window.label)")
                 .font(theme.monoFont(size: 11))
                 .foregroundStyle(theme.textSecondary(for: colorScheme))
             Button {
@@ -202,7 +209,7 @@ struct ReviewMode: View {
                     .lineSpacing(theme.lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                if entry.rescueCount >= 3 {
+                if entry.rescueCount >= StreamEntry.graduateHintThreshold {
                     HStack(spacing: 5) {
                         Image(systemName: "graduationcap.fill")
                             .font(.system(size: 9))

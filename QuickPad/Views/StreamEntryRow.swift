@@ -70,6 +70,8 @@ struct StreamEntryRow: View {
 
             Spacer(minLength: 6)
 
+            graduateHintChip
+
             trailingLabel
                 .frame(width: 38, alignment: .trailing)
                 .animation(.easeInOut(duration: 0.2), value: isHovering)
@@ -342,6 +344,27 @@ struct StreamEntryRow: View {
             // Stale task with no timestamp — show only the dot.
             staleNudgeDot
                 .transition(.opacity)
+        }
+    }
+
+    /// Suppressed for read-only rows (no writable origin to graduate from).
+    @ViewBuilder
+    private var graduateHintChip: some View {
+        if entry.shouldShowGraduateHint, onGraduate != nil {
+            Button {
+                onGraduate?(entry)
+            } label: {
+                Text("↑\(entry.rescueCount)")
+                    .font(theme.monoFont(size: 9, weight: .medium))
+                    .foregroundStyle(theme.accent.opacity(0.75))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(theme.accent.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("Rescued \(entry.rescueCount) times — click to graduate to a pinned note")
+            .transition(.opacity)
         }
     }
 

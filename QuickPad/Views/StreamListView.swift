@@ -10,6 +10,7 @@ import SwiftUI
 ///   3. Phase 2 will add click-to-rescue animations on rows — raw
 ///      `LazyVStack` keeps full control of hit-testing and transitions.
 struct StreamListView: View {
+    /// Caller has already applied soft-delete + type-filter passes.
     let sections: [StreamSection]
     /// Forwarded to every `StreamEntryRow` so matches get highlighted
     /// inline. Empty string = no highlighting (normal render).
@@ -26,28 +27,7 @@ struct StreamListView: View {
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
     var onGraduate: ((StreamEntry) -> Void)?
 
-    /// Active type filter. Nil = show all.
-    var typeFilter: BulletType? = nil
-
-    /// Sections with soft-deleted entries filtered out, plus optional
-    /// type filter applied.
-    private var visibleSections: [StreamSection] {
-        sections.compactMap { section in
-            var visible = section.entries.filter { !$0.isDeleted }
-            if let filter = typeFilter {
-                visible = visible.filter { $0.bulletType == filter }
-            }
-            guard !visible.isEmpty else {
-                if section.rawHeader != nil && section.entries.isEmpty {
-                    return section
-                }
-                return nil
-            }
-            var copy = section
-            copy.entries = visible
-            return copy
-        }
-    }
+    private var visibleSections: [StreamSection] { sections }
 
     var body: some View {
         if visibleSections.isEmpty {

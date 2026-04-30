@@ -68,15 +68,35 @@ struct StreamEntry: Identifiable, Hashable, Codable {
         return max(0, cal.dateComponents([.day], from: entryDay, to: today).day ?? 0)
     }
 
-    /// True for pending tasks that have been sitting open for at least
-    /// a week. Drives the small pulsing dot in `StreamEntryRow` that
-    /// asks the user to migrate or cancel — Phase 7's lightweight nudge.
-    /// Threshold (7 days) sits well below the 30-day archive rule so
-    /// stale tasks get noticed long before they're auto-archived.
+    /// Days a pending task can sit before it's flagged stale. Sits well
+    /// below the 30-day archive rule so users notice the nudge before
+    /// the archiver removes anything.
+    static let staleThresholdDays: Int = 7
+
+    /// Pending task that's been open at least `staleThresholdDays` —
+    /// drives the row's pulsing dot and the stale stats chip.
     var isStaleTask: Bool {
         bulletType == .task
             && (taskState == nil || taskState == .pending)
-            && ageInDays >= 7
+            && ageInDays >= Self.staleThresholdDays
+    }
+
+    /// Default 3 = "survived three rescue passes." Override via
+    /// `defaults write dev.quickpad.QuickPad graduateHintThreshold -int N`.
+    static let graduateHintThresholdDefault: Int = 3
+    static let graduateHintThresholdKey: String = "graduateHintThreshold"
+
+    static var graduateHintThreshold: Int {
+        let stored = UserDefaults.standard.integer(forKey: graduateHintThresholdKey)
+        return stored > 0 ? stored : graduateHintThresholdDefault
+    }
+
+    var shouldShowGraduateHint: Bool {
+        guard !isDeleted, bulletType != .unknown else { return false }
+        if bulletType == .task, let state = taskState, state != .pending {
+            return false
+        }
+        return rescueCount >= Self.graduateHintThreshold
     }
 
     /// Opacity driven by the gravity-decay curve from `ARCHITECTURE.md`.

@@ -27,6 +27,13 @@ struct InputBar: View {
                 .focused($isFocused)
                 .onSubmit(submit)
                 .submitLabel(.send)
+                // The popover has one logical input target, so Tab has
+                // no useful focus target — repurpose to cycle bullet
+                // type. Shift-Tab is left alone as an escape hatch.
+                .onKeyPress(.tab) {
+                    cycleBulletWithBounce()
+                    return .handled
+                }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -47,13 +54,7 @@ struct InputBar: View {
 
     private var bulletButton: some View {
         Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                model.cycleBullet()
-                bulletBounce = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                bulletBounce = false
-            }
+            cycleBulletWithBounce()
         } label: {
             Text(model.bulletType.glyph)
                 .font(font)
@@ -67,6 +68,16 @@ struct InputBar: View {
         }
         .buttonStyle(.plain)
         .help("\(model.bulletType.label) — click to cycle")
+    }
+
+    private func cycleBulletWithBounce() {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+            model.cycleBullet()
+            bulletBounce = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            bulletBounce = false
+        }
     }
 
     private func submit() {

@@ -23,27 +23,68 @@ struct MarkdownFileStore {
             .appendingPathComponent("archive", isDirectory: true)
     }
 
-    /// Load every `archive/*.md` file and return the parsed entries
-    /// flattened into a single section list. Used by ⌘F to extend
-    /// search beyond the current stream so a "lost last year" idea
-    /// remains findable.
+    /// Used by ⌘F to extend search into archived months. Cached and
+    /// invalidated when any archive file's mtime advances; archives
+    /// grow monotonically via StreamArchiver so this stays correct in
+    /// practice. Call `invalidateArchiveCache()` after a manual vim edit.
     func loadArchives(directoryURL: URL = MarkdownFileStore.archiveDirectoryURL) -> [StreamSection] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: directoryURL.path),
               let urls = try? fm.contentsOfDirectory(
                 at: directoryURL,
-                includingPropertiesForKeys: nil,
+                includingPropertiesForKeys: [.contentModificationDateKey],
                 options: [.skipsHiddenFiles]
               ) else {
+            // Directory missing: treat as empty and clear any stale cache.
+            Self.cacheLock.lock()
+            Self.archiveCache = nil
+            Self.cacheLock.unlock()
             return []
         }
+        let mdURLs = urls.filter { $0.pathExtension.lowercased() == "md" }
+
+        // Cache key = (file count, max mtime). If neither changed since
+        // the last call, the parsed result is still valid.
+        let mtimes = mdURLs.compactMap {
+            (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate
+        }
+        let signature = ArchiveSignature(count: mdURLs.count, latestMtime: mtimes.max())
+
+        Self.cacheLock.lock()
+        if let cache = Self.archiveCache, cache.signature == signature {
+            let cached = cache.sections
+            Self.cacheLock.unlock()
+            return cached
+        }
+        Self.cacheLock.unlock()
+
         var sections: [StreamSection] = []
-        for url in urls.filter({ $0.pathExtension.lowercased() == "md" }) {
+        for url in mdURLs {
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
             sections.append(contentsOf: StreamParser.parse(text))
         }
+
+        Self.cacheLock.lock()
+        Self.archiveCache = (signature: signature, sections: sections)
+        Self.cacheLock.unlock()
         return sections
     }
+
+    /// Force the next `loadArchives` to re-parse from disk.
+    static func invalidateArchiveCache() {
+        cacheLock.lock()
+        archiveCache = nil
+        cacheLock.unlock()
+    }
+
+    private struct ArchiveSignature: Equatable {
+        let count: Int
+        let latestMtime: Date?
+    }
+
+    private static let cacheLock = NSLock()
+    private static var archiveCache: (signature: ArchiveSignature, sections: [StreamSection])?
 
     /// Loads the stream. Returns the parsed sections plus a flag
     /// indicating whether the data came from disk or the bundled sample.
