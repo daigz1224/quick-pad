@@ -4,6 +4,9 @@ QuickPad.xcodeproj/
 # Xcode build artifacts
 build/
 DerivedData/
+
+# Release artifacts produced by scripts/release.sh
+dist/
 *.xcworkspace
 !default.xcworkspace
 
