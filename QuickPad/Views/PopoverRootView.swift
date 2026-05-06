@@ -194,6 +194,11 @@ struct PopoverRootView: View {
                 // ⌘R review mode
                 Button("Review") { showReview.toggle() }
                     .keyboardShortcut("r", modifiers: .command)
+
+                // ⌘Q quit (agent apps have no app menu, so we wire it
+                // here so popover-key state catches it).
+                Button("Quit") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q", modifiers: .command)
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -477,10 +482,57 @@ struct PopoverRootView: View {
                 if !popoverController.isDetached {
                     pinButton
                 }
+                moreMenu
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    /// Pinned Notes + Quit. The menu-bar status item itself is now a
+    /// direct toggle for the Island, so this is the home for things
+    /// that used to live in the right-click context menu.
+    private var moreMenu: some View {
+        let urls = PinnedNoteStore().list()
+        return Menu {
+            Menu("Pinned Notes") {
+                if urls.isEmpty {
+                    Text("No pinned notes — graduate one from a stream entry")
+                } else {
+                    ForEach(urls, id: \.self) { url in
+                        Button(url.deletingPathExtension().lastPathComponent) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Divider()
+                    Button("Reveal Folder in Finder") {
+                        revealPinnedFolder()
+                    }
+                }
+            }
+            Divider()
+            Button("Quit QuickPad") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut("q", modifiers: .command)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(Theme.SubtleButton())
+        .help("More")
+        .fixedSize()
+    }
+
+    private func revealPinnedFolder() {
+        let dir = PinnedNoteStore.pinnedDirectoryURL
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([dir])
     }
 
     private var statsBarToggle: some View {

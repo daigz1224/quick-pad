@@ -11,7 +11,7 @@ recent changes, and `ROADMAP.md` for plans.
 
 - **Menu bar popover** — click the icon or press **⌥N** anywhere to toggle
 - **Quick Capture panel** — press **⌥⇧N** anywhere to summon a borderless mini input at the top of the active screen; type, hit Enter, the panel closes and you're back in your original app
-- **Dynamic Island widget** — right-click the menu bar icon → **Show Island** for an always-visible pill that shows the latest entry; hover to expand, click to dismiss
+- **Dynamic Island widget** — right-click the menu bar icon to toggle the always-visible pill that shows the latest entry; hover to expand, click to dismiss
 - **Floating window** — detach with **⌘D** for always-on-top note taking
 - **Rapid input** — Enter to append, Tab to cycle bullet type (note → task → question → idea)
 - **Hint bar** — clickable bullet/prefix chips below the input row for one-click type switching and `read:` / `watch:` / `listen:` / `*priority` insertion; toggle on/off from the header
@@ -21,7 +21,7 @@ recent changes, and `ROADMAP.md` for plans.
 - **Change bullet type** — right-click → Bullet Type to re-classify an existing entry
 - **In-place edit** — right-click → Edit to fix typos without breaking timestamp
 - **Soft delete + undo** — right-click → Delete with 5-second undo window
-- **Graduate to pinned note** — right-click → Graduate writes the entry to `~/.quickpad/pinned/<slug>.md` and pulls it out of the stream; pinned notes appear under the menu bar's right-click → **Pinned Notes** submenu
+- **Graduate to pinned note** — right-click → Graduate writes the entry to `~/.quickpad/pinned/<slug>.md` and pulls it out of the stream; pinned notes appear under the popover header's **⋯** menu
 - **Inline Markdown** — `` `code` ``, **bold**, `[links](url)` render natively
 - **Search** — **⌘F** full-text search across the live stream *and* every `~/.quickpad/archive/*.md` file; archive hits appear under a `── FROM ARCHIVE ──` divider
 - **Review mode** — **⌘R** opens a card-by-card review of entries from 7 / 30 / 90 days ago; each card offers Rescue · Graduate · Done/Cancel · Skip with single-key shortcuts. Closes Karpathy's review loop without inviting list-skim
@@ -79,7 +79,9 @@ The built app is at `~/Library/Developer/Xcode/DerivedData/QuickPad-*/Build/Prod
 | **Right-click entry** | Edit, Delete, Rescue, Graduate, change task state, change Bullet Type |
 | **Click task glyph** | Toggle pending ↔ done |
 | **Hover old entry** | Shows "↑ rescue" hint (click to rescue) |
-| **Right-click menu bar icon** | Show/Hide Island, Pinned Notes, Quit |
+| **⌘Q** | Quit (also under the popover ⋯ menu) |
+| **Right-click menu bar icon** | Toggle Dynamic Island |
+| **Popover header ⋯** | Pinned Notes, Quit |
 
 Content shortcut: typing `* foo` writes `*priority foo` (red left border).
 

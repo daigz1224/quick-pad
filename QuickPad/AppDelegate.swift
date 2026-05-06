@@ -17,7 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isIslandExpanded = false
     private let archiver = StreamArchiver()
     private var archiveTimer: Timer?
-    private let pinnedStore = PinnedNoteStore()
     private var quickCapturePanel: QuickCapturePanel?
     /// Guards against `windowWillClose` firing during a programmatic
     /// `reattachToPopover` call — we don't want the delegate to
@@ -72,98 +71,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        let isRightClick = event?.type == .rightMouseUp
-        let isOptionLeftClick = event?.type == .leftMouseUp
-            && event?.modifierFlags.contains(.option) == true
 
-        if isRightClick || isOptionLeftClick {
-            showContextMenu(from: sender)
-        } else {
-            // If floating panel is open, bring it to front instead.
-            if let panel = floatingPanel, panel.isVisible {
-                panel.makeKeyAndOrderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
-            } else {
-                togglePopover(sender)
-            }
+        // Right-click is a direct toggle for the Island — its single
+        // most useful function. Pinned Notes / Quit live in the popover
+        // header's "more" menu now.
+        if event?.type == .rightMouseUp {
+            toggleIsland()
+            return
         }
-    }
 
-    private func showContextMenu(from button: NSStatusBarButton) {
-        let menu = NSMenu()
-
-        let islandItem = NSMenuItem(
-            title: islandPanel?.isVisible == true ? "Hide Island" : "Show Island",
-            action: #selector(toggleIsland),
-            keyEquivalent: ""
-        )
-        menu.addItem(islandItem)
-
-        menu.addItem(.separator())
-        menu.addItem(buildPinnedNotesItem())
-
-        menu.addItem(.separator())
-
-        menu.addItem(
-            NSMenuItem(
-                title: "Quit QuickPad",
-                action: #selector(NSApplication.terminate(_:)),
-                keyEquivalent: "q"
-            )
-        )
-        statusItem.menu = menu
-        button.performClick(nil)
-        statusItem.menu = nil
-    }
-
-    // MARK: - Pinned notes submenu
-
-    private func buildPinnedNotesItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Pinned Notes", action: nil, keyEquivalent: "")
-        let submenu = NSMenu()
-        let urls = pinnedStore.list()
-
-        if urls.isEmpty {
-            let placeholder = NSMenuItem(
-                title: "No pinned notes — graduate one from a stream entry",
-                action: nil,
-                keyEquivalent: ""
-            )
-            placeholder.isEnabled = false
-            submenu.addItem(placeholder)
+        // Left-click: bring floating panel to front if it's open,
+        // otherwise toggle the popover.
+        if let panel = floatingPanel, panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
         } else {
-            for url in urls {
-                let item = NSMenuItem(
-                    title: url.deletingPathExtension().lastPathComponent,
-                    action: #selector(openPinnedNote(_:)),
-                    keyEquivalent: ""
-                )
-                item.target = self
-                item.representedObject = url
-                submenu.addItem(item)
-            }
-            submenu.addItem(.separator())
-            let revealAll = NSMenuItem(
-                title: "Reveal Folder in Finder",
-                action: #selector(revealPinnedFolder),
-                keyEquivalent: ""
-            )
-            revealAll.target = self
-            submenu.addItem(revealAll)
+            togglePopover(sender)
         }
-        parent.submenu = submenu
-        return parent
-    }
-
-    @objc private func openPinnedNote(_ sender: NSMenuItem) {
-        guard let url = sender.representedObject as? URL else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    @objc private func revealPinnedFolder() {
-        let dir = PinnedNoteStore.pinnedDirectoryURL
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        NSWorkspace.shared.activateFileViewerSelecting([dir])
     }
 
     // MARK: - Popover
@@ -258,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Island (Dynamic Island style widget)
 
-    @objc private func toggleIsland() {
+    private func toggleIsland() {
         if let panel = islandPanel, panel.isVisible {
             hideIsland()
         } else {
