@@ -40,7 +40,11 @@ targets:
         CFBundleVersion: "1"
         CFBundlePackageType: APPL
         LSMinimumSystemVersion: "14.0"
-        LSUIElement: true
+        # Launchpad shows the app (LSUIElement: false), but the Dock
+        # icon is suppressed at runtime via NSApp.setActivationPolicy(.accessory)
+        # in applicationWillFinishLaunching. This combo is the standard
+        # menu-bar-app pattern when you still want Launchpad presence.
+        LSUIElement: false
         NSHumanReadableCopyright: ""
         NSPrincipalClass: NSApplication
     entitlements:

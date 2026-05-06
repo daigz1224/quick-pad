@@ -23,6 +23,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// double-clear state when we're already handling it.
     private var isReattaching = false
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // No Dock icon, no Cmd-Tab — but LSUIElement is false in the
+        // Info.plist so Launchpad still lists us. Setting policy this
+        // early prevents a brief Dock icon flash on launch.
+        NSApp.setActivationPolicy(.accessory)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configurePopover()
