@@ -45,23 +45,27 @@ struct IslandView: View {
 
     // MARK: - Data
 
-    /// Only today's entries — the Island is a "now" view.
-    private var recentEntries: [StreamEntry] {
+    /// Cached so per-frame state changes (hover, focus, bounce, toast)
+    /// don't re-walk the section list and re-run Calendar.isDateInToday.
+    /// Refreshed via `.onChange(of: viewModel.sections, initial: true)`.
+    @State private var recentEntries: [StreamEntry] = []
+    @State private var latestSummary: String = "QuickPad"
+
+    private var totalEntryCount: Int { recentEntries.count }
+
+    private func recomputeRecentEntries() {
         let todaySections = viewModel.sections.filter { section in
             guard let date = section.date else { return false }
             return Calendar.current.isDateInToday(date)
         }
-        return todaySections.flatMap { $0.entries }.filter { !$0.isDeleted }
-    }
-
-    private var latestSummary: String {
-        guard let first = recentEntries.first else { return "QuickPad" }
-        let text = first.content
-        return text.count > 28 ? String(text.prefix(28)) + "…" : text
-    }
-
-    private var totalEntryCount: Int {
-        recentEntries.count
+        let entries = todaySections.flatMap { $0.entries }.filter { !$0.isDeleted }
+        recentEntries = entries
+        if let first = entries.first {
+            let text = first.content
+            latestSummary = text.count > 28 ? String(text.prefix(28)) + "…" : text
+        } else {
+            latestSummary = "QuickPad"
+        }
     }
 
     // MARK: - Body
@@ -125,6 +129,9 @@ struct IslandView: View {
             performBounce()
         }
         .onExitCommand { collapse() }
+        .onChange(of: viewModel.sections, initial: true) { _, _ in
+            recomputeRecentEntries()
+        }
         .onChange(of: totalEntryCount) { old, new in
             // Bounce when new entries appear while compact.
             if new > old && !isExpanded {
@@ -232,9 +239,7 @@ struct IslandView: View {
             .animation(.easeInOut(duration: 0.15), value: toastMessage != nil)
         }
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                isInputFocused = true
-            }
+            isInputFocused = true
         }
     }
 

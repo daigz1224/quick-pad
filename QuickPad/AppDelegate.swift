@@ -172,7 +172,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.contentSize = NSSize(width: 420, height: 520)
         popover.behavior = .transient
-        popover.animates = true
+        // Skip the system slide-in animation — for a quick-capture
+        // surface, "appears instantly" beats "slides in over 250ms".
+        popover.animates = false
         popover.contentViewController = NSHostingController(
             rootView: PopoverRootView()
                 .environment(viewModel)
@@ -192,7 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
-        viewModel.load()
+        // Don't reload on every show — the FSEvents watcher keeps the
+        // model live, and any recent mutation reloads via
+        // `reloadFromDiskAnimated`. Re-parsing here just adds a stall
+        // before the popover slides in.
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
@@ -315,7 +320,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             islandPanel = panel
 
             // Boot animation: flash open briefly, then auto-collapse.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // One runloop turn lets SwiftUI render the compact state once
+            // so the expand transition has a frame to animate from.
+            DispatchQueue.main.async {
                 panel.performBootAnimation()
             }
         }

@@ -199,7 +199,18 @@ struct PopoverRootView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }
-        .onAppear { viewModel.load() }
+        .onAppear {
+            // FSEvents + the launch-time `viewModel.load()` keep the
+            // model fresh, so we don't reload on appear — that just
+            // adds a stall on first show.
+            //
+            // Pre-warm the archive cache so the first ⌘F keystroke
+            // doesn't pay the disk hit when the user wants to search
+            // back into archived months.
+            Task.detached(priority: .utility) {
+                _ = MarkdownFileStore().loadArchives()
+            }
+        }
         .sheet(isPresented: $showExportSheet) {
             ExportRangeSheet { interval in
                 StreamExporter.savePanel(

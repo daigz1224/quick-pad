@@ -75,6 +75,11 @@ final class IslandPanel: NSPanel {
     static let expandedWidth: CGFloat = 360
     static let expandedHeight: CGFloat = 340
 
+    /// Grace period before hover-to-expand fires. Short enough to feel
+    /// instant, long enough to ignore cursor-fly-by while the user is
+    /// reaching for the menu bar.
+    static let hoverExpandDelay: TimeInterval = 0.08
+
     // MARK: - Init
 
     init(screen: NSScreen?) {
@@ -319,7 +324,7 @@ final class IslandPanel: NSPanel {
 
     private func startHoverTimer() {
         hoverTimer?.invalidate()
-        hoverTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: Self.hoverExpandDelay, repeats: false) { [weak self] _ in
             guard let self, !self.isExpanded else { return }
             self.requestExpand(true)
         }

@@ -74,7 +74,6 @@ struct StreamEntryRow: View {
 
             trailingLabel
                 .frame(width: 38, alignment: .trailing)
-                .animation(.easeInOut(duration: 0.2), value: isHovering)
         }
         .overlay(alignment: .leading) {
             if entry.isPriority {
