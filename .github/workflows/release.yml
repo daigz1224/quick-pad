@@ -1,0 +1,74 @@
+name: Release
+
+# Triggers when a tag like v0.1.0 / v1.2.3 is pushed. Builds, tests,
+# packages a Universal ad-hoc-signed zip, and creates a GitHub Release
+# with the zip attached.
+#
+# Usage:
+#   git tag -a v0.1.0 -m "first release"
+#   git push origin v0.1.0
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # gh release create needs this
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish ${{ github.ref_name }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so the auto-generated release notes can diff
+          # against the previous tag.
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Verify tag matches CFBundleShortVersionString
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PLIST_VERSION=$(plutil -extract CFBundleShortVersionString raw QuickPad/Info.plist)
+          if [ "$TAG_VERSION" != "$PLIST_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (=$TAG_VERSION) does not match"
+            echo "::error::QuickPad/Info.plist CFBundleShortVersionString ($PLIST_VERSION)."
+            echo "::error::Bump the version in project.yml + run xcodegen, commit, then re-tag."
+            exit 1
+          fi
+          echo "✓ tag $GITHUB_REF_NAME matches Info.plist version $PLIST_VERSION"
+
+      - name: Build, test, package (scripts/release.sh)
+        run: bash scripts/release.sh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ZIP="dist/QuickPad-${GITHUB_REF_NAME#v}.zip"
+          [ -f "$ZIP" ] || { echo "::error::$ZIP missing — release.sh did not produce the expected artifact"; exit 1; }
+
+          # --notes-file gives us the install instructions header.
+          # --generate-notes appends GitHub's auto changelog (commits
+          # since the previous tag).
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file .github/release-header.md \
+            --generate-notes \
+            --verify-tag
