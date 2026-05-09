@@ -1,29 +1,31 @@
 #!/usr/bin/env swift
 //
-// Generates QuickPad's AppIcon set procedurally — same design language
-// as MenuBarIcon (rapid-log rows: bullet glyph + horizontal "text"
-// lines) scaled up to a full macOS app icon. Colors match
-// QuickPad/Views/ThemePreset.swift so menu-bar and app icon read as
-// the same family.
+// Generates QuickPad's AppIcon set procedurally — an *Ephemeris*
+// composition: hairline horizontal strata fading into the substrate,
+// with a single cinnabar mark dignifying the present moment. See
+// docs/icon-philosophy.md for the design philosophy this expresses.
 //
 // Usage:  swift scripts/generate-icon.swift
 //
 // Writes PNGs into QuickPad/Resources/Assets.xcassets/AppIcon.appiconset/
-// at every size the asset catalog needs, and rewrites Contents.json so
+// at every size the asset catalog needs and rewrites Contents.json so
 // each slot's declared dimensions match its physical pixels.
 
 import AppKit
 import CoreGraphics
 import Foundation
 
-// MARK: - Palette (mirrors QuickPad/Views/ThemePreset.swift Default palette)
+// MARK: - Palette
+//
+// Warm parchment, sumi-ink dark, oxidised cinnabar — the same three
+// tones as the philosophy poster. The discipline of working with three
+// colors (and only one of them as accent) is what gives the cinnabar
+// mark its weight.
 
-let bgDark       = NSColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1.0)
-let panelDark    = NSColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1.0)
-let textTertiary = NSColor(red: 0.45, green: 0.45, blue: 0.45, alpha: 1.0)
-let accent       = NSColor(red: 0.40, green: 0.55, blue: 0.90, alpha: 1.0)
-let taskDone     = NSColor(red: 0.30, green: 0.78, blue: 0.60, alpha: 1.0)
-let idea         = NSColor(red: 0.95, green: 0.75, blue: 0.30, alpha: 1.0)
+let parchmentTop    = NSColor(red: 246/255, green: 240/255, blue: 228/255, alpha: 1.0)
+let parchmentBottom = NSColor(red: 232/255, green: 224/255, blue: 209/255, alpha: 1.0)
+let sumi            = NSColor(red:  28/255, green:  25/255, blue:  22/255, alpha: 1.0)
+let cinnabar        = NSColor(red: 172/255, green:  56/255, blue:  44/255, alpha: 1.0)
 
 // MARK: - Renderer
 
@@ -35,9 +37,7 @@ func renderIcon(size: CGFloat) -> NSImage {
 
     guard let ctx = NSGraphicsContext.current?.cgContext else { return image }
 
-    // Background squircle. macOS Big Sur+ icon corner ≈ 22.37% of width
-    // — close enough to Apple's continuous-corner spec for the
-    // pixel-accuracy we need.
+    // --- Background squircle (Big Sur+ corner ≈ 22.37% of side) ---
     let cornerRadius = size * 0.2237
     let bgRect = CGRect(origin: .zero, size: canvas)
     let bgPath = CGPath(
@@ -46,22 +46,19 @@ func renderIcon(size: CGFloat) -> NSImage {
         cornerHeight: cornerRadius,
         transform: nil
     )
-    ctx.addPath(bgPath); ctx.setFillColor(bgDark.cgColor); ctx.fillPath()
+    ctx.addPath(bgPath); ctx.setFillColor(parchmentBottom.cgColor); ctx.fillPath()
 
-    // Subtle top-to-bottom gradient inside the squircle so the icon
-    // doesn't read as a flat black rectangle at large sizes.
+    // Whisper of a top→bottom gradient — keeps the surface from reading
+    // as a flat swatch at large sizes.
     ctx.saveGState()
     ctx.addPath(bgPath); ctx.clip()
-    if let gradient = CGGradient(
+    if let g = CGGradient(
         colorsSpace: CGColorSpaceCreateDeviceRGB(),
-        colors: [
-            panelDark.cgColor,
-            bgDark.cgColor,
-        ] as CFArray,
+        colors: [parchmentTop.cgColor, parchmentBottom.cgColor] as CFArray,
         locations: [0, 1]
     ) {
         ctx.drawLinearGradient(
-            gradient,
+            g,
             start: CGPoint(x: 0, y: size),
             end: .zero,
             options: []
@@ -69,142 +66,83 @@ func renderIcon(size: CGFloat) -> NSImage {
     }
     ctx.restoreGState()
 
-    // Three stream rows — tighter spacing than the original sketch so
-    // the content reads as a clean rapid-log block, not a sparse list.
-    // Cocoa coords: origin is bottom-left, so the first entry in
-    // `rowYs` is the visually-top row.
-    let rowSpacing = size * 0.135
-    let centerY    = size * 0.50
-    let rowYs: [CGFloat] = [centerY + rowSpacing, centerY, centerY - rowSpacing]
+    // --- The strata ---
+    //
+    // Seven equal-length hairlines stratified vertically. The topmost
+    // is the cinnabar — the day's marked observation. Beneath it,
+    // sumi lines dissolve in opacity (gravity decay).
+    //
+    // Critically, lengths are uniform: in QuickPad's data model,
+    // `gravityOpacity` is a pure function of `ageInDays`. An entry's
+    // text length has nothing to do with its age. Tapering line
+    // length top-to-bottom would tell a false story ("older notes
+    // are shorter"). Opacity alone carries the decay.
+    //
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔  ← cinnabar (today)
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔  (each fainter than the one above)
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    //  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    //
+    // Cocoa coords — origin bottom-left.
+    let strataWidth: CGFloat = 0.66
+    let strata: [(y: CGFloat, alpha: CGFloat, isAccent: Bool)] = [
+        (y: 0.770, alpha: 1.00, isAccent: true ),
+        (y: 0.680, alpha: 0.82, isAccent: false),
+        (y: 0.590, alpha: 0.62, isAccent: false),
+        (y: 0.500, alpha: 0.46, isAccent: false),
+        (y: 0.410, alpha: 0.32, isAccent: false),
+        (y: 0.320, alpha: 0.22, isAccent: false),
+        (y: 0.230, alpha: 0.14, isAccent: false),
+    ]
 
-    let bulletX     = size * 0.24
-    let textStartX  = size * 0.36
-    let glyphSize   = size * 0.062
-    let lineHeight  = size * 0.024
+    // Stroke widths — hairline relative to canvas. Floored to 1px so
+    // the lines don't disappear at 16×16. The accent gets a single
+    // notch more weight, never enough to feel heavy.
+    let strokeBase   = max(1.0, (size * 0.0050).rounded())
+    let strokeAccent = max(1.0, (size * 0.0062).rounded())
 
-    // Row 1 — note (accent dash) + 2 text lines.
-    let r0 = rowYs[0]
-    drawDash(
-        in: ctx,
-        center: CGPoint(x: bulletX, y: r0),
-        length: glyphSize * 1.4,
-        thickness: size * 0.022,
-        color: accent
-    )
-    drawTextLine(
-        in: ctx, start: CGPoint(x: textStartX, y: r0 + size * 0.016),
-        length: size * 0.40, thickness: lineHeight, color: textTertiary
-    )
-    drawTextLine(
-        in: ctx, start: CGPoint(x: textStartX, y: r0 - size * 0.032),
-        length: size * 0.26, thickness: lineHeight,
-        color: textTertiary.withAlphaComponent(0.55)
-    )
+    let leftMargin = size * 0.180  // strata begin here
 
-    // Row 2 — task (green checkbox) + 1 text line.
-    let r1 = rowYs[1]
-    drawCheckbox(
-        in: ctx,
-        center: CGPoint(x: bulletX, y: r1),
-        sideLength: glyphSize,
-        thickness: size * 0.014,
-        color: taskDone
-    )
-    drawTextLine(
-        in: ctx, start: CGPoint(x: textStartX, y: r1),
-        length: size * 0.32, thickness: lineHeight, color: textTertiary
-    )
+    ctx.setLineCap(.round)
+    for stratum in strata {
+        let y  = size * stratum.y
+        let x0 = leftMargin
+        let x1 = leftMargin + size * strataWidth
+        let w  = stratum.isAccent ? strokeAccent : strokeBase
+        let color: NSColor = stratum.isAccent
+            ? cinnabar
+            : sumi.withAlphaComponent(stratum.alpha)
 
-    // Row 3 — priority (yellow `!`) + 1 text line.
-    let r2 = rowYs[2]
-    drawExclamation(
-        in: ctx,
-        center: CGPoint(x: bulletX, y: r2),
-        height: glyphSize * 1.2,
-        thickness: size * 0.022,
-        color: idea
-    )
-    drawTextLine(
-        in: ctx, start: CGPoint(x: textStartX, y: r2),
-        length: size * 0.36, thickness: lineHeight, color: textTertiary
-    )
+        ctx.setStrokeColor(color.cgColor)
+        ctx.setLineWidth(w)
+        ctx.move(to: CGPoint(x: x0, y: y))
+        ctx.addLine(to: CGPoint(x: x1, y: y))
+        ctx.strokePath()
+
+        // Cinnabar coordinate-tick in the inner left margin — the
+        // single graphic flourish, the astronomer's "I was watching
+        // here" mark. Sized to read as a deliberate stroke even at
+        // 64×64; collapses gracefully at smaller sizes.
+        if stratum.isAccent {
+            let tickX = size * 0.108
+            let tickH = size * 0.030
+            ctx.setStrokeColor(cinnabar.cgColor)
+            ctx.setLineWidth(strokeAccent)
+            ctx.move(to: CGPoint(x: tickX, y: y - tickH/2))
+            ctx.addLine(to: CGPoint(x: tickX, y: y + tickH/2))
+            ctx.strokePath()
+        }
+    }
 
     return image
-}
-
-// MARK: - Glyph primitives
-
-func drawDash(in ctx: CGContext, center: CGPoint, length: CGFloat, thickness: CGFloat, color: NSColor) {
-    ctx.setStrokeColor(color.cgColor)
-    ctx.setLineWidth(thickness)
-    ctx.setLineCap(.round)
-    ctx.move(to: CGPoint(x: center.x - length/2, y: center.y))
-    ctx.addLine(to: CGPoint(x: center.x + length/2, y: center.y))
-    ctx.strokePath()
-}
-
-func drawCheckbox(in ctx: CGContext, center: CGPoint, sideLength: CGFloat, thickness: CGFloat, color: NSColor) {
-    let rect = CGRect(
-        x: center.x - sideLength/2,
-        y: center.y - sideLength/2,
-        width: sideLength,
-        height: sideLength
-    )
-    let r = thickness * 1.2
-    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil))
-    ctx.setStrokeColor(color.cgColor)
-    ctx.setLineWidth(thickness)
-    ctx.strokePath()
-}
-
-func drawExclamation(in ctx: CGContext, center: CGPoint, height: CGFloat, thickness: CGFloat, color: NSColor) {
-    ctx.setFillColor(color.cgColor)
-    // Bar (upper ~60%).
-    let barHeight = height * 0.62
-    let bar = CGRect(
-        x: center.x - thickness/2,
-        y: center.y - height/2 + height * 0.32,
-        width: thickness,
-        height: barHeight
-    )
-    ctx.addPath(CGPath(
-        roundedRect: bar,
-        cornerWidth: thickness/2, cornerHeight: thickness/2,
-        transform: nil
-    ))
-    ctx.fillPath()
-    // Dot at bottom.
-    let dot = thickness * 1.4
-    let dotRect = CGRect(
-        x: center.x - dot/2,
-        y: center.y - height/2,
-        width: dot, height: dot
-    )
-    ctx.fillEllipse(in: dotRect)
-}
-
-func drawTextLine(in ctx: CGContext, start: CGPoint, length: CGFloat, thickness: CGFloat, color: NSColor) {
-    let rect = CGRect(
-        x: start.x,
-        y: start.y - thickness/2,
-        width: length,
-        height: thickness
-    )
-    ctx.setFillColor(color.cgColor)
-    ctx.addPath(CGPath(
-        roundedRect: rect,
-        cornerWidth: thickness/2, cornerHeight: thickness/2,
-        transform: nil
-    ))
-    ctx.fillPath()
 }
 
 // MARK: - Encoding
 
 func writePNG(_ image: NSImage, size: CGFloat, to url: URL) throws {
-    // Force the bitmap to render at exactly `size × size` pixels —
-    // NSImage.tiffRepresentation can otherwise embed @2x metadata that
-    // makes actool warn about size mismatches.
     let target = NSSize(width: size, height: size)
     let bmp = NSBitmapImageRep(
         bitmapDataPlanes: nil,
@@ -258,8 +196,6 @@ for s in sizes {
     print("✓ \(url.lastPathComponent) (\(Int(s))×\(Int(s)))")
 }
 
-// Rewrite Contents.json so every slot points to a PNG with the
-// matching physical size — fixes the actool size warnings.
 let contentsJSON = """
 {
   "images" : [
