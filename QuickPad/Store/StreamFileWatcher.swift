@@ -147,14 +147,24 @@ final class StreamFileWatcher {
     /// Called on `callbackQueue`. Filters for our target file, then
     /// schedules a debounced hop to main.
     private func handle(paths: [String]) {
-        // If we're inside a suppression window (our own write just
-        // happened), skip the event entirely.
-        if let until = suppressUntil, Date() < until { return }
-
         let hit = paths.contains { path in
             (path as NSString).lastPathComponent == fileName
         }
         guard hit else { return }
+
+        // Mirror to the widget's sandbox container on every change,
+        // including suppressed ones. Suppression skips the in-app
+        // reload (our own write doesn't need to bounce back through
+        // the model), but the widget still wants the freshest content
+        // even when QuickPad itself was the writer.
+        WidgetMirror.mirrorStream(
+            from: directory.appendingPathComponent(fileName)
+        )
+
+        // If we're inside a suppression window (our own write just
+        // happened), skip the in-app reload — but the mirror above
+        // already ran.
+        if let until = suppressUntil, Date() < until { return }
 
         pendingFire?.cancel()
         let work = DispatchWorkItem { [weak self] in

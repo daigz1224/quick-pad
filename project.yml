@@ -30,6 +30,10 @@ targets:
           - QuickPad.entitlements
     resources:
       - path: QuickPad/Resources
+    # The widget extension is embedded into the .app bundle's PlugIns/
+    # directory automatically by xcodegen when listed as a dependency.
+    dependencies:
+      - target: QuickPadWidget
     info:
       path: QuickPad/Info.plist
       properties:
@@ -47,6 +51,12 @@ targets:
         LSUIElement: false
         NSHumanReadableCopyright: ""
         NSPrincipalClass: NSApplication
+        # URL scheme — widget taps fire `quickpad://open` to bring the
+        # popover up.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.quickpad.QuickPad.url
+            CFBundleURLSchemes:
+              - quickpad
     entitlements:
       path: QuickPad/QuickPad.entitlements
       properties:
@@ -60,6 +70,52 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES
+
+  QuickPadWidget:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: QuickPadWidget
+        excludes:
+          - Info.plist
+          - QuickPadWidget.entitlements
+      # Reused pure-Foundation models + parser. Listed explicitly so
+      # this target compiles them too — no duplication, both targets
+      # share the source files via the build phases.
+      - path: QuickPad/Models/StreamEntry.swift
+      - path: QuickPad/Models/StreamSection.swift
+      - path: QuickPad/Models/BulletType.swift
+      - path: QuickPad/Models/TaskState.swift
+      - path: QuickPad/Store/StreamParser.swift
+    info:
+      path: QuickPadWidget/Info.plist
+      properties:
+        CFBundleName: QuickPadWidget
+        CFBundleDisplayName: QuickPad Widget
+        CFBundleIdentifier: dev.quickpad.QuickPad.Widget
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        CFBundlePackageType: XPC!
+        LSMinimumSystemVersion: "14.0"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: QuickPadWidget/QuickPadWidget.entitlements
+      properties:
+        # Plain sandboxed widget. The main app mirrors stream.md into
+        # this extension's own sandbox container at
+        # `~/Library/Containers/dev.quickpad.QuickPad.Widget/Data/Documents/`
+        # (see `Store/WidgetMirror.swift`), so no entitlement gymnastics
+        # are needed — the widget reads its own `.documentDirectory`.
+        com.apple.security.app-sandbox: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.quickpad.QuickPad.Widget
+        PRODUCT_NAME: QuickPadWidget
+        INFOPLIST_FILE: QuickPadWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: QuickPadWidget/QuickPadWidget.entitlements
+        SKIP_INSTALL: NO
 
   QuickPadTests:
     type: bundle.unit-test

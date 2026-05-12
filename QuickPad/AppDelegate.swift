@@ -37,11 +37,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureFileWatcher()
         viewModel.fileWatcher = fileWatcher
         viewModel.load()
+        // Seed the widget's mirror so a freshly-added desktop widget
+        // sees content even before the user types anything else.
+        // Subsequent mirrors ride the FSEvents watcher.
+        WidgetMirror.mirrorStream(from: MarkdownFileStore.streamFileURL)
         runArchiveAndSchedule()
 
         // Wire the detach/reattach toggle.
         popoverController.onDetachToggle = { [weak self] in
             self?.toggleDetach()
+        }
+    }
+
+    /// Handles `quickpad://` deep links — fired when the user taps the
+    /// desktop widget. The widget passes `quickpad://open`; bring up the
+    /// popover (or the floating panel, if detached) so the just-opened
+    /// stream is right there.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { $0.scheme == "quickpad" }) else { return }
+        if let panel = floatingPanel, panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else if !popover.isShown {
+            showPopover()
         }
     }
 

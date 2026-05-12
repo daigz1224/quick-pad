@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import WidgetKit
 
 /// Owns the parsed stream and routes every mutation through
 /// `StreamFileIO` so disk-bound writes don't stall the popover when
@@ -71,6 +72,10 @@ final class StreamViewModel {
             isShowingSample = result.usedFallback
         }
         sectionsVersion &+= 1
+        // Push the desktop widget to refresh — every successful mutation
+        // is a content change worth reflecting. WidgetKit rate-limits
+        // reloads internally, so spamming this is safe.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Visible sections (cached)

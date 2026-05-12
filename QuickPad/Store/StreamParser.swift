@@ -103,7 +103,7 @@ enum StreamParser {
         // Strip `@rN` first so its presence doesn't interfere with the
         // `>deleted` / task-state splits below. Missing `@rN` parses
         // as count 0 — old streams remain forward-compatible.
-        let (rescueCount, typeToken) = StreamMutator.extractRescueCount(fromToken: rawTypeToken)
+        let (rescueCount, typeToken) = Self.extractRescueCount(fromToken: rawTypeToken)
 
         // Strip `>deleted` suffix before parsing the bullet type so
         // `[note>deleted]` and `[task>done>deleted]` parse correctly.
@@ -200,4 +200,21 @@ enum StreamParser {
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
+
+    /// Pull `@rN` out of a bracket token, returning the count and the
+    /// cleaned token. Missing `@rN` parses as count 0 so older streams
+    /// remain forward-compatible. Kept local so the parser doesn't
+    /// drag a dependency on `StreamMutator` (which writes to disk) into
+    /// read-only consumers like the widget extension.
+    static func extractRescueCount(fromToken token: String) -> (count: Int, cleaned: String) {
+        guard let range = token.range(of: #"\s*@r(\d+)"#, options: .regularExpression) else {
+            return (0, token)
+        }
+        let match = String(token[range])
+        let digits = match.drop { !$0.isNumber }
+        let count = Int(digits) ?? 0
+        var cleaned = token
+        cleaned.removeSubrange(range)
+        return (count, cleaned.trimmingCharacters(in: .whitespaces))
+    }
 }
