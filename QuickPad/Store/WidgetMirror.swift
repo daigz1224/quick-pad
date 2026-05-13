@@ -52,24 +52,22 @@ enum WidgetMirror {
     /// the next FSEvent will try again.
     @discardableResult
     static func mirrorStream(from source: URL) -> Bool {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: source.path) else { return false }
-
         let dest = streamMirrorURL
         let destDir = dest.deletingLastPathComponent()
 
-        // Ensure the directory chain exists. The widget's container is
-        // auto-created the first time the widget runs; pre-creating it
-        // from here lets the very first capture land before the user
-        // ever drags the widget onto the desktop.
         do {
-            try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+            // The widget's container is auto-created the first time
+            // the widget runs; pre-creating from here lets the very
+            // first capture land before the user adds the widget.
+            try FileManager.default.createDirectory(
+                at: destDir, withIntermediateDirectories: true
+            )
             let data = try Data(contentsOf: source)
             try data.write(to: dest, options: .atomic)
             return true
         } catch {
-            // Mirror failure is non-fatal — the widget stays one tick
-            // behind. Log for debugging.
+            // Non-fatal — widget stays one tick behind; next FSEvent
+            // retries. Log for debugging.
             print("[WidgetMirror] failed: \(error.localizedDescription)")
             return false
         }

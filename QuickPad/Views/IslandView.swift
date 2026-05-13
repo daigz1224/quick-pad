@@ -54,11 +54,7 @@ struct IslandView: View {
     private var totalEntryCount: Int { recentEntries.count }
 
     private func recomputeRecentEntries() {
-        let todaySections = viewModel.sections.filter { section in
-            guard let date = section.date else { return false }
-            return Calendar.current.isDateInToday(date)
-        }
-        let entries = todaySections.flatMap { $0.entries }.filter { !$0.isDeleted }
+        let entries = viewModel.sections.todayEntries()
         recentEntries = entries
         if let first = entries.first {
             let text = first.content

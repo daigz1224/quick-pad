@@ -1,11 +1,26 @@
 import SwiftUI
 import WidgetKit
 
-/// Medium-sized widget. Matches the Ephemeris icon's aesthetic:
-/// parchment ground, sumi text, one cinnabar accent reserved for the
-/// freshest entry. Tap anywhere → opens the main app via `quickpad://`.
+/// Medium-sized widget. Matches the Ephemeris icon's aesthetic when
+/// the widget is actively in view: parchment surface, sumi text, one
+/// cinnabar accent reserved for the freshest entry.
+///
+/// When the system marks the widget as **inactive** — a window covers
+/// it, or the desktop has been idle long enough — `widgetRenderingMode`
+/// flips to `.accented` and we collapse into the system's vibrancy
+/// language: container goes translucent so the desktop wallpaper bleeds
+/// through, text uses hierarchical system styles so they desaturate to
+/// a single tint, and our accent maps to `.tint` so the cinnabar fades
+/// alongside everything else. Same effect Apple's Calendar / Weather
+/// widgets do when they recede into the background.
+///
+/// Tap anywhere → opens the main app via `quickpad://`.
 struct QuickPadWidgetView: View {
     let entry: QuickPadEntry
+
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var isAccented: Bool { renderingMode == .accented }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -30,7 +45,10 @@ struct QuickPadWidgetView: View {
 
             Spacer(minLength: 0)
         }
-        .widgetURL(URL(string: "quickpad://open"))
+        .widgetURL(AppURLScheme.openURL)
+        .containerBackground(for: .widget) {
+            isAccented ? Color.clear : Color.widgetBackground
+        }
     }
 
     // MARK: - Header
@@ -38,20 +56,20 @@ struct QuickPadWidgetView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Text("QuickPad")
-                .font(.system(size: 12, weight: .semibold, design: .default))
-                .foregroundStyle(Color.widgetTextPrimary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(primaryStyle)
             Text("· today")
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(Color.widgetTextTertiary)
+                .font(.system(size: 11))
+                .foregroundStyle(tertiaryStyle)
             Spacer()
             if entry.totalToday > 0 {
                 Text("\(entry.totalToday)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.widgetTextSecondary)
+                    .foregroundStyle(secondaryStyle)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
-                        Capsule().fill(Color.widgetTextTertiary.opacity(0.15))
+                        Capsule().fill(badgeFill)
                     )
             }
         }
@@ -63,10 +81,11 @@ struct QuickPadWidgetView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("nothing captured yet today")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.widgetTextTertiary)
+                .foregroundStyle(tertiaryStyle)
             Text("⌥N to open · ⌥⇧N to quick-capture")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(Color.widgetTextTertiary.opacity(0.7))
+                .foregroundStyle(tertiaryStyle)
+                .opacity(0.75)
         }
     }
 
@@ -75,33 +94,70 @@ struct QuickPadWidgetView: View {
     @ViewBuilder
     private func row(for e: StreamEntry, isFreshest: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            // Bullet glyph. The freshest gets cinnabar (the Ephemeris
-            // accent — "today's marked observation"); others stay sumi.
+            // `.widgetAccentable` opts the cinnabar bullet into the
+            // system's inactive-mode tint, so it desaturates alongside
+            // everything else when the widget fades.
             Text(e.displayGlyph)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(isFreshest ? Color.widgetAccent : Color.widgetTextSecondary)
+                .foregroundStyle(isFreshest ? accentStyle : secondaryStyle)
                 .frame(width: 12, alignment: .leading)
+                .widgetAccentable(isFreshest)
 
             Text(e.content)
                 .font(.system(size: 11))
-                .foregroundStyle(isFreshest ? Color.widgetTextPrimary : Color.widgetTextSecondary)
+                .foregroundStyle(isFreshest ? primaryStyle : secondaryStyle)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             Spacer(minLength: 0)
         }
     }
+
+    // MARK: - Style helpers
+    //
+    // Hand off to hierarchical system styles in `.accented` so macOS
+    // can tint the whole widget uniformly when it goes inactive.
+
+    private var primaryStyle: AnyShapeStyle {
+        isAccented
+            ? AnyShapeStyle(HierarchicalShapeStyle.primary)
+            : AnyShapeStyle(Color.widgetTextPrimary)
+    }
+
+    private var secondaryStyle: AnyShapeStyle {
+        isAccented
+            ? AnyShapeStyle(HierarchicalShapeStyle.secondary)
+            : AnyShapeStyle(Color.widgetTextSecondary)
+    }
+
+    private var tertiaryStyle: AnyShapeStyle {
+        isAccented
+            ? AnyShapeStyle(HierarchicalShapeStyle.tertiary)
+            : AnyShapeStyle(Color.widgetTextTertiary)
+    }
+
+    private var accentStyle: AnyShapeStyle {
+        isAccented
+            ? AnyShapeStyle(HierarchicalShapeStyle.primary)
+            : AnyShapeStyle(Color.widgetAccent)
+    }
+
+    private var badgeFill: AnyShapeStyle {
+        isAccented
+            ? AnyShapeStyle(HierarchicalShapeStyle.quaternary)
+            : AnyShapeStyle(Color.widgetTextTertiary.opacity(0.15))
+    }
 }
 
 // MARK: - Palette tokens
 //
-// Pulled from the Ephemeris icon language so the widget reads as the
-// same family as the app icon. Kept local to the widget target — the
-// main app's Theme is SwiftUI-friendly but assumes ThemeManager
-// observation we don't want to drag across the target boundary.
+// Used only in `.fullColor` rendering — when the widget is active and
+// reads as the parchment surface from the Ephemeris icon language.
+// `.accented` mode bypasses these in favor of hierarchical system
+// styles, which the OS desaturates and tints uniformly.
 
 extension Color {
-    /// Warm parchment — the widget's surface.
+    /// Warm parchment — the widget's surface when active.
     static let widgetBackground = Color(
         red: 244/255, green: 238/255, blue: 226/255
     )
@@ -122,3 +178,7 @@ extension Color {
         red: 172/255, green:  56/255, blue:  44/255
     )
 }
+
+// `.widgetAccentable(_ flag: Bool)` is already part of stock SwiftUI
+// (`widgetAccentable(_ isAccentable: Bool = true)`), so the `isFreshest`
+// call sites resolve directly against Apple's API.

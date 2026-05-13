@@ -30,3 +30,20 @@ struct StreamSection: Identifiable, Hashable {
         self.isReadOnly = isReadOnly
     }
 }
+
+extension Array where Element == StreamSection {
+    /// Today's non-deleted entries, in their stream order (newest first).
+    /// Shared by `IslandView` and the widget so the two surfaces can't
+    /// drift on what counts as "today".
+    func todayEntries(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [StreamEntry] {
+        filter { section in
+            guard let date = section.date else { return false }
+            return calendar.isDate(date, inSameDayAs: now)
+        }
+        .flatMap(\.entries)
+        .filter { !$0.isDeleted }
+    }
+}

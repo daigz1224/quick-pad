@@ -73,15 +73,7 @@ struct QuickPadProvider: TimelineProvider {
         guard let text = try? String(contentsOf: streamURL, encoding: .utf8) else {
             return QuickPadEntry(date: Date(), entries: [], totalToday: 0)
         }
-        let sections = StreamParser.parse(text)
-        let cal = Calendar.current
-        let todayEntries = sections
-            .filter { section in
-                guard let date = section.date else { return false }
-                return cal.isDateInToday(date)
-            }
-            .flatMap { $0.entries }
-            .filter { !$0.isDeleted }
+        let todayEntries = StreamParser.parse(text).todayEntries()
         // Show the most recent 4 — fits cleanly in a medium widget.
         let visible = Array(todayEntries.prefix(4))
         return QuickPadEntry(date: Date(), entries: visible, totalToday: todayEntries.count)

@@ -49,12 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Handles `quickpad://` deep links — fired when the user taps the
-    /// desktop widget. The widget passes `quickpad://open`; bring up the
-    /// popover (or the floating panel, if detached) so the just-opened
-    /// stream is right there.
+    /// Handles desktop-widget taps. The widget fires `AppURLScheme.openURL`;
+    /// surface the popover (or the floating panel, if detached).
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard urls.contains(where: { $0.scheme == "quickpad" }) else { return }
+        guard urls.contains(where: { $0.scheme == AppURLScheme.scheme }) else { return }
         if let panel = floatingPanel, panel.isVisible {
             panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)

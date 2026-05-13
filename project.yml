@@ -87,6 +87,7 @@ targets:
       - path: QuickPad/Models/StreamSection.swift
       - path: QuickPad/Models/BulletType.swift
       - path: QuickPad/Models/TaskState.swift
+      - path: QuickPad/Models/AppURLScheme.swift
       - path: QuickPad/Store/StreamParser.swift
     info:
       path: QuickPadWidget/Info.plist
