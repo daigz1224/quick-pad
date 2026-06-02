@@ -40,7 +40,7 @@ targets:
         CFBundleName: QuickPad
         CFBundleDisplayName: QuickPad
         CFBundleIdentifier: dev.quickpad.QuickPad
-        CFBundleShortVersionString: "0.2.0"
+        CFBundleShortVersionString: "0.2.1"
         CFBundleVersion: "1"
         CFBundlePackageType: APPL
         LSMinimumSystemVersion: "14.0"
@@ -95,7 +95,7 @@ targets:
         CFBundleName: QuickPadWidget
         CFBundleDisplayName: QuickPad Widget
         CFBundleIdentifier: dev.quickpad.QuickPad.Widget
-        CFBundleShortVersionString: "0.2.0"
+        CFBundleShortVersionString: "0.2.1"
         CFBundleVersion: "1"
         CFBundlePackageType: XPC!
         LSMinimumSystemVersion: "14.0"
