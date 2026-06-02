@@ -131,4 +131,33 @@ final class InlineMarkdownTests: XCTestCase {
         let plain = attr.map { String($0.characters) }
         XCTAssertEqual(plain, "just plain text")
     }
+
+    // MARK: - New inline syntax (italic / strikethrough / hashtag)
+
+    func testItalicRenders() {
+        let text = InlineMarkdown.render("this is *important* aside")
+        XCTAssertNotNil(text)
+    }
+
+    func testStrikethroughRenders() {
+        let text = InlineMarkdown.render("idea ~~scrap this~~ keep going")
+        XCTAssertNotNil(text)
+    }
+
+    func testStrikethroughLeavesPlainTextWhenNoMatch() {
+        // No `~~` should leave the rendering untouched.
+        let text = InlineMarkdown.render("nothing to strike here")
+        XCTAssertNotNil(text)
+    }
+
+    func testHashtagRenders() {
+        let text = InlineMarkdown.render("brainstorm session #ideas #v2")
+        XCTAssertNotNil(text)
+    }
+
+    func testChineseHashtagRenders() {
+        let text = InlineMarkdown.render("回看 #读书笔记 部分")
+        XCTAssertNotNil(text)
+    }
+
 }

@@ -27,6 +27,9 @@ struct StreamListView: View {
     var onBulletTypeChange: ((StreamEntry, BulletType) -> Void)?
     var onGraduate: ((StreamEntry) -> Void)?
 
+    @Environment(ThemeManager.self) private var theme
+    @Environment(\.colorScheme) private var scheme
+
     private var visibleSections: [StreamSection] { sections }
 
     var body: some View {
@@ -44,7 +47,7 @@ struct StreamListView: View {
                         .padding(.top, index == 0 ? 6 : 10)
                         .padding(.bottom, 4)
 
-                        ForEach(section.entries) { entry in
+                        ForEach(Array(section.entries.enumerated()), id: \.element.id) { entryIdx, entry in
                             StreamEntryRow(
                                 entry: entry,
                                 highlightQuery: highlightQuery,
@@ -58,6 +61,16 @@ struct StreamListView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+
+                            if entryIdx < section.entries.count - 1 {
+                                // Whisper-quiet hairline between entries — gives
+                                // each capture a contained "card" feel without
+                                // adding visual weight.
+                                Rectangle()
+                                    .fill(theme.divider(for: scheme).opacity(0.35))
+                                    .frame(height: 0.5)
+                                    .padding(.horizontal, 18)
+                            }
                         }
                     }
                 }

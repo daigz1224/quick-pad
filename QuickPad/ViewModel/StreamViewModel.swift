@@ -173,8 +173,31 @@ final class StreamViewModel {
         }
     }
 
-    func append(bulletType: BulletType, content: String) {
+    /// Collapse every run of whitespace (spaces, tabs, embedded
+    /// newlines) into a single space, and trim. Voice dictation and
+    /// paste-from-clipboard often slip `\n` inside a single logical
+    /// thought; without this, the embedded newlines would split it
+    /// into multiple stream entries on disk and break the atomicity
+    /// of delete / edit / rescue / graduate.
+    static func normalize(_ content: String) -> String {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Fast path for clean single-line input (the common case): no
+        // embedded line break, no internal whitespace run. Skips the
+        // split/filter/join allocation entirely.
+        if !trimmed.contains(where: { $0.isNewline })
+            && !trimmed.contains("  ")
+            && !trimmed.contains("\t")
+        {
+            return trimmed
+        }
+        return trimmed
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    func append(bulletType: BulletType, content: String) {
+        let trimmed = Self.normalize(content)
         guard !trimmed.isEmpty else { return }
         let writer = self.writer
         performMutation(errorPrefix: "failed to write stream.md") {
@@ -183,7 +206,7 @@ final class StreamViewModel {
     }
 
     func editEntry(_ entry: StreamEntry, newContent: String) {
-        let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = Self.normalize(newContent)
         guard !trimmed.isEmpty else {
             lastWriteError = "Content cannot be empty."
             return

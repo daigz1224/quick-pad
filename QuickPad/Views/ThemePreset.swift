@@ -43,8 +43,8 @@ final class ThemeManager {
     // 420-wide popover.
     let contentTracking: CGFloat    = -0.15
     let ideaItalic: Bool            = false
-    let lineSpacing: CGFloat        = 1
-    let rowVerticalPadding: CGFloat = 2
+    let lineSpacing: CGFloat        = 3
+    let rowVerticalPadding: CGFloat = 3
     let cornerRadius: CGFloat       = 6
 
     /// Base size multiplier — bumped above 1.0 because the hardcoded
